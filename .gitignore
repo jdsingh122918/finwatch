@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+target/
+src-tauri/target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Tauri
+src-tauri/gen/
+
+# FinWatch runtime data (never commit user data)
+.finwatch/
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
