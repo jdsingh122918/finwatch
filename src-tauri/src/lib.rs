@@ -1,3 +1,4 @@
+pub mod commands;
 pub mod types;
 
 #[tauri::command]
@@ -11,7 +12,18 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            commands::agent::agent_start,
+            commands::agent::agent_stop,
+            commands::agent::agent_status,
+            commands::config::config_get,
+            commands::config::config_update,
+            commands::anomalies::anomalies_list,
+            commands::anomalies::anomalies_feedback,
+            commands::memory::memory_search,
+            commands::sources::sources_health,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
