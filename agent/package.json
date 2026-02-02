@@ -12,10 +12,12 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
     "@finwatch/shared": "workspace:*",
+    "better-sqlite3": "^12.6.2",
     "gpt-tokenizer": "^3.4.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "tsx": "^4.0.0"
   }
 }
