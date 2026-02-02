@@ -1,51 +1,78 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { Dashboard } from "./pages/Dashboard";
+import { AnomalyFeed } from "./pages/AnomalyFeed";
+import { AgentLog } from "./pages/AgentLog";
+import { SourceHealth } from "./pages/SourceHealth";
+import { Settings } from "./pages/Settings";
+import type { FeedbackVerdict } from "@finwatch/shared";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+const tabs = ["Dashboard", "Anomalies", "Agent", "Sources", "Settings"] as const;
+type Tab = (typeof tabs)[number];
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+export default function App() {
+  const [activeTab, setActiveTab] = useState<Tab>("Dashboard");
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
+    <div
+      style={{
+        padding: 16,
+        color: "#eee",
+        background: "#111",
+        minHeight: "100vh",
+      }}
+    >
+      <nav
+        style={{
+          display: "flex",
+          gap: 4,
+          marginBottom: 16,
+          borderBottom: "1px solid #333",
+          paddingBottom: 8,
         }}
       >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: "8px 16px",
+              background: activeTab === tab ? "#333" : "transparent",
+              color: "#eee",
+              border: "none",
+              borderRadius: 4,
+              cursor: "pointer",
+            }}
+          >
+            {tab}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === "Dashboard" && <Dashboard ticks={[]} />}
+      {activeTab === "Anomalies" && (
+        <AnomalyFeed
+          anomalies={[]}
+          feedbackMap={new Map()}
+          onFeedback={(id: string, v: FeedbackVerdict) => {
+            console.log(id, v);
+          }}
         />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      )}
+      {activeTab === "Agent" && (
+        <AgentLog
+          status={{ state: "idle", totalCycles: 0, totalAnomalies: 0, uptime: 0 }}
+          log={[]}
+        />
+      )}
+      {activeTab === "Sources" && <SourceHealth sources={{}} />}
+      {activeTab === "Settings" && (
+        <Settings
+          config="{}"
+          onSave={(c) => {
+            console.log(c);
+          }}
+        />
+      )}
+    </div>
   );
 }
-
-export default App;

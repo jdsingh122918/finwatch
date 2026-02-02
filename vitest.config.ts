@@ -17,6 +17,15 @@ export default defineConfig({
           include: ["src/**/*.test.ts"],
         },
       },
+      {
+        test: {
+          name: "frontend",
+          root: "./src",
+          include: ["**/*.test.{ts,tsx}"],
+          environment: "happy-dom",
+          setupFiles: ["./test-setup.ts"],
+        },
+      },
     ],
   },
 });
