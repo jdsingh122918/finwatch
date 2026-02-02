@@ -1,22 +1,13 @@
-import { parseJsonRpcRequest, createJsonRpcResponse, createJsonRpcError } from "./ipc/json-rpc.js";
+import { JsonRpcServer } from "./ipc/json-rpc-server.js";
 
-const methods: Record<string, (params: Record<string, unknown>) => unknown> = {
-  ping: () => ({ status: "ok", timestamp: Date.now() }),
-};
+export { JsonRpcServer } from "./ipc/json-rpc-server.js";
 
-function handleRequest(raw: string): string {
-  try {
-    const req = parseJsonRpcRequest(raw);
-    const handler = methods[req.method];
-    if (!handler) {
-      return JSON.stringify(createJsonRpcError(req.id, -32601, `Method not found: ${req.method}`));
-    }
-    const result = handler(req.params ?? {});
-    return JSON.stringify(createJsonRpcResponse(req.id, result));
-  } catch {
-    return JSON.stringify(createJsonRpcError(0, -32700, "Parse error"));
-  }
-}
+const server = new JsonRpcServer();
+
+server.register("ping", async () => ({
+  status: "ok",
+  timestamp: Date.now(),
+}));
 
 export function start(): void {
   process.stdin.setEncoding("utf-8");
@@ -29,15 +20,18 @@ export function start(): void {
 
     for (const line of lines) {
       if (line.trim()) {
-        const response = handleRequest(line.trim());
-        process.stdout.write(response + "\n");
+        server.handleRequest(line.trim()).then((response) => {
+          process.stdout.write(response + "\n");
+        });
       }
     }
   });
 }
 
 // Start when run directly
-const isMain = process.argv[1]?.endsWith("index.ts") || process.argv[1]?.endsWith("index.js");
+const isMain =
+  process.argv[1]?.endsWith("index.ts") ||
+  process.argv[1]?.endsWith("index.js");
 if (isMain) {
   start();
 }

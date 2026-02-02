@@ -10,7 +10,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@finwatch/shared": "workspace:*"
+    "@anthropic-ai/sdk": "^0.72.1",
+    "@finwatch/shared": "workspace:*",
+    "gpt-tokenizer": "^3.4.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "tsx": "^4.0.0"
