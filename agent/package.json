@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
-    "@finwatch/shared": "workspace:*"
+    "@finwatch/shared": "workspace:*",
+    "gpt-tokenizer": "^3.4.0"
   },
   "devDependencies": {
     "tsx": "^4.0.0"
