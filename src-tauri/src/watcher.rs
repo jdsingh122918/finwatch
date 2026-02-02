@@ -14,7 +14,7 @@ pub fn classify_event(event: &Event, config_path: &std::path::Path) -> Option<Wa
                 if path == config_path {
                     return Some(WatchEvent::ConfigChanged);
                 }
-                if path.extension().map_or(false, |ext| ext == "csv") {
+                if path.extension().is_some_and(|ext| ext == "csv") {
                     return Some(WatchEvent::SourceFileChanged {
                         path: path.clone(),
                     });

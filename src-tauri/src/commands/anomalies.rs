@@ -4,7 +4,7 @@ use crate::types::anomaly::{Anomaly, AnomalyFeedback, AnomalyFilter, Severity};
 pub fn anomalies_insert_db(pool: &DbPool, anomaly: &Anomaly) -> Result<(), String> {
     let conn = pool.get().map_err(|e| e.to_string())?;
     let metrics_json = serde_json::to_string(&anomaly.metrics).map_err(|e| e.to_string())?;
-    let severity_str = serde_json::to_value(&anomaly.severity)
+    let severity_str = serde_json::to_value(anomaly.severity)
         .map_err(|e| e.to_string())?
         .as_str()
         .unwrap_or("low")
@@ -105,7 +105,7 @@ pub fn anomalies_list_db(
 
 pub fn anomalies_feedback_db(pool: &DbPool, feedback: &AnomalyFeedback) -> Result<(), String> {
     let conn = pool.get().map_err(|e| e.to_string())?;
-    let verdict_str = serde_json::to_value(&feedback.verdict)
+    let verdict_str = serde_json::to_value(feedback.verdict)
         .map_err(|e| e.to_string())?
         .as_str()
         .unwrap_or("needs_review")

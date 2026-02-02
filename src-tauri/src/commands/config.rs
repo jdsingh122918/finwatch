@@ -42,7 +42,7 @@ fn merge_json(base: &mut serde_json::Value, patch: &serde_json::Value) {
         (base, patch)
     {
         for (key, value) in patch_map {
-            if value.is_object() && base_map.get(key).map_or(false, |v| v.is_object()) {
+            if value.is_object() && base_map.get(key).is_some_and(|v| v.is_object()) {
                 merge_json(base_map.get_mut(key).unwrap(), value);
             } else {
                 base_map.insert(key.clone(), value.clone());

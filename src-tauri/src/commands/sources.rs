@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 pub fn sources_health_set_db(pool: &DbPool, health: &SourceHealth) -> Result<(), String> {
     let conn = pool.get().map_err(|e| e.to_string())?;
-    let status_str = serde_json::to_value(&health.status)
+    let status_str = serde_json::to_value(health.status)
         .map_err(|e| e.to_string())?
         .as_str()
         .unwrap_or("offline")
