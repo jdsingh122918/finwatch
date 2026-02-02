@@ -1,19 +1,26 @@
 pub mod commands;
+pub mod db;
+pub mod events;
+pub mod jsonrpc;
+pub mod migrations;
+pub mod sidecar;
 pub mod types;
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+pub mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let data_dir = db::finwatch_data_dir();
+    let db_path = data_dir.join("state").join("finwatch.sqlite");
+    let pool = db::create_pool(&db_path).expect("Failed to create database pool");
+    db::init_db(&pool).expect("Failed to initialize database");
+    migrations::run_pending(&pool).expect("Failed to run migrations");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
+        .manage(pool)
         .invoke_handler(tauri::generate_handler![
-            greet,
             commands::agent::agent_start,
             commands::agent::agent_stop,
             commands::agent::agent_status,
