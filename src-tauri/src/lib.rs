@@ -5,6 +5,7 @@ pub mod jsonrpc;
 pub mod migrations;
 pub mod sidecar;
 pub mod types;
+pub mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
