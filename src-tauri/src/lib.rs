@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod db;
 pub mod events;
+pub mod jsonrpc;
 pub mod migrations;
 pub mod sidecar;
 pub mod types;
