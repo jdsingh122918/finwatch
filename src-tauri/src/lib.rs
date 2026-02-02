@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod db;
+pub mod events;
 pub mod migrations;
 pub mod types;
 
