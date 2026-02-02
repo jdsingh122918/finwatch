@@ -10,6 +10,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.1",
     "@finwatch/shared": "workspace:*"
   },
   "devDependencies": {
