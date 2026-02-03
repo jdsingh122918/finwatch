@@ -30,6 +30,9 @@ pub fn run() {
             commands::anomalies::anomalies_feedback,
             commands::memory::memory_search,
             commands::sources::sources_health,
+            commands::credentials::credentials_set,
+            commands::credentials::credentials_get,
+            commands::credentials::credentials_exists,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

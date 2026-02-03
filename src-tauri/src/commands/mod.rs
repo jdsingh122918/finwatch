@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod config;
 pub mod anomalies;
+pub mod credentials;
 pub mod memory;
 pub mod sources;
 

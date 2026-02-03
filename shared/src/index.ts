@@ -51,3 +51,26 @@ export type {
 export type { IpcCommands, IpcEvents } from "./ipc.js";
 
 export { type Config, ConfigSchema, parseConfig } from "./config.js";
+
+export type {
+  TradeSide,
+  OrderType,
+  SuggestionStatus,
+  TradeOutcome,
+  TradingMode,
+  TradeAction,
+  TradeSuggestion,
+  PortfolioPosition,
+  RiskLimits,
+  TradeAuditEntry,
+  TradeHistoryFilter,
+} from "./trading.js";
+
+export {
+  TradeActionSchema,
+  TradeSuggestionSchema,
+  PortfolioPositionSchema,
+  RiskLimitsSchema,
+  TradeAuditEntrySchema,
+  TradeHistoryFilterSchema,
+} from "./trading.js";

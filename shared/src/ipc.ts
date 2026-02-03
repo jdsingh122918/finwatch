@@ -3,6 +3,13 @@ import type { Anomaly, AnomalyFeedback, AnomalyFilter } from "./anomaly.js";
 import type { DataTick, SourceHealth } from "./data.js";
 import type { SearchResult, MemoryEvent } from "./memory.js";
 import type { Config } from "./config.js";
+import type {
+  TradeSuggestion,
+  TradeAuditEntry,
+  PortfolioPosition,
+  TradingMode,
+  TradeHistoryFilter,
+} from "./trading.js";
 
 // Commands: React -> Rust -> Node.js (request/response)
 export type IpcCommands = {
@@ -15,6 +22,12 @@ export type IpcCommands = {
   "anomalies:feedback": (id: string, feedback: AnomalyFeedback) => void;
   "memory:search": (query: string) => SearchResult[];
   "sources:health": () => Record<string, SourceHealth>;
+  "trading:suggest": () => TradeSuggestion[];
+  "trading:approve": (suggestionId: string) => void;
+  "trading:dismiss": (suggestionId: string) => void;
+  "trading:history": (filter?: TradeHistoryFilter) => TradeAuditEntry[];
+  "trading:positions": () => PortfolioPosition[];
+  "trading:mode": (mode?: TradingMode) => TradingMode;
 };
 
 // Events: Node.js -> Rust -> React (push, fire-and-forget)
@@ -24,4 +37,8 @@ export type IpcEvents = {
   "anomaly:detected": Anomaly;
   "source:health-change": SourceHealth;
   "memory:updated": MemoryEvent;
+  "trade:suggestion": TradeSuggestion;
+  "trade:executed": TradeAuditEntry;
+  "trade:expired": TradeSuggestion;
+  "portfolio:update": PortfolioPosition[];
 };
