@@ -1,16 +1,58 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Dashboard } from "./pages/Dashboard";
 import { AnomalyFeed } from "./pages/AnomalyFeed";
 import { AgentLog } from "./pages/AgentLog";
 import { SourceHealth } from "./pages/SourceHealth";
 import { Settings } from "./pages/Settings";
-import type { FeedbackVerdict } from "@finwatch/shared";
+import { createDataSlice } from "./store/data-slice";
+import { createAnomalySlice } from "./store/anomaly-slice";
+import { createAgentSlice } from "./store/agent-slice";
+import type { SourceHealth as SH } from "@finwatch/shared";
 
 const tabs = ["Dashboard", "Anomalies", "Agent", "Sources", "Settings"] as const;
 type Tab = (typeof tabs)[number];
 
+// Create store instances
+const dataStore = createDataSlice();
+const anomalyStore = createAnomalySlice();
+const agentStore = createAgentSlice();
+
+// Expose stores on window for testing
+declare global {
+  interface Window {
+    __stores: {
+      data: typeof dataStore;
+      anomaly: typeof anomalyStore;
+      agent: typeof agentStore;
+      sources: { getState: () => { sources: Record<string, SH> }; setState: (s: Record<string, SH>) => void; subscribe: (fn: () => void) => () => void };
+    };
+  }
+}
+
+// Simple sources store (no zustand needed)
+const sourcesListeners = new Set<() => void>();
+let sourcesSnapshot = { sources: {} as Record<string, SH> };
+const sourcesStore = {
+  getState: () => sourcesSnapshot,
+  setState: (s: Record<string, SH>) => {
+    sourcesSnapshot = { sources: s };
+    sourcesListeners.forEach((fn) => fn());
+  },
+  subscribe: (fn: () => void) => {
+    sourcesListeners.add(fn);
+    return () => { sourcesListeners.delete(fn); };
+  },
+};
+
+window.__stores = { data: dataStore, anomaly: anomalyStore, agent: agentStore, sources: sourcesStore };
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("Dashboard");
+
+  const dataState = useSyncExternalStore(dataStore.subscribe, dataStore.getState);
+  const anomalyState = useSyncExternalStore(anomalyStore.subscribe, anomalyStore.getState);
+  const agentState = useSyncExternalStore(agentStore.subscribe, agentStore.getState);
+  const sourceState = useSyncExternalStore(sourcesStore.subscribe, sourcesStore.getState);
 
   return (
     <div
@@ -48,23 +90,21 @@ export default function App() {
         ))}
       </nav>
 
-      {activeTab === "Dashboard" && <Dashboard ticks={[]} />}
+      {activeTab === "Dashboard" && <Dashboard ticks={dataState.ticks} />}
       {activeTab === "Anomalies" && (
         <AnomalyFeed
-          anomalies={[]}
-          feedbackMap={new Map()}
-          onFeedback={(id: string, v: FeedbackVerdict) => {
-            console.log(id, v);
-          }}
+          anomalies={anomalyState.anomalies}
+          feedbackMap={anomalyState.feedbackMap}
+          onFeedback={(id, v) => anomalyState.addFeedback(id, v)}
         />
       )}
       {activeTab === "Agent" && (
         <AgentLog
-          status={{ state: "idle", totalCycles: 0, totalAnomalies: 0, uptime: 0 }}
-          log={[]}
+          status={agentState.status}
+          log={agentState.activityLog}
         />
       )}
-      {activeTab === "Sources" && <SourceHealth sources={{}} />}
+      {activeTab === "Sources" && <SourceHealth sources={sourceState.sources} />}
       {activeTab === "Settings" && (
         <Settings
           config="{}"
