@@ -1,14 +1,15 @@
 import type { TradeAction, TradeSuggestion, SuggestionStatus } from "@finwatch/shared";
+import { createLogger } from "../utils/logger.js";
 
 export type LiveSuggesterConfig = {
   expirationMs: number;
 };
 
-let suggestionSeq = 0;
-
 export class LiveSuggester {
   private config: LiveSuggesterConfig;
+  private log = createLogger("live-suggester");
   private suggestions: Map<string, TradeSuggestion> = new Map();
+  private suggestionSeq = 0;
 
   onSuggestion?: (suggestion: TradeSuggestion) => void;
   onApproved?: (suggestion: TradeSuggestion) => void;
@@ -21,13 +22,14 @@ export class LiveSuggester {
 
   suggest(action: TradeAction): TradeSuggestion {
     const suggestion: TradeSuggestion = {
-      id: `suggestion-${++suggestionSeq}-${Date.now()}`,
+      id: `suggestion-${++this.suggestionSeq}-${Date.now()}`,
       action,
       expiresAt: Date.now() + this.config.expirationMs,
       status: "pending",
     };
 
     this.suggestions.set(suggestion.id, suggestion);
+    this.log.info("New trade suggestion", { id: suggestion.id, symbol: action.symbol });
     this.onSuggestion?.(suggestion);
     return suggestion;
   }
@@ -52,6 +54,9 @@ export class LiveSuggester {
       }
     }
 
+    if (count > 0) {
+      this.log.info("Expired stale suggestions", { count });
+    }
     return count;
   }
 

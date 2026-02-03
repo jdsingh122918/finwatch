@@ -280,4 +280,104 @@ describe("AlpacaStreamSource", () => {
 
     await source.stop();
   });
+
+  // --- New error handling tests ---
+
+  it("throws on empty keyId", () => {
+    expect(
+      () => new AlpacaStreamSource(createConfig({ keyId: "" }), mockWsFactory),
+    ).toThrow("AlpacaStreamSource requires non-empty keyId and secretKey in config");
+  });
+
+  it("throws on empty secretKey", () => {
+    expect(
+      () => new AlpacaStreamSource(createConfig({ secretKey: "" }), mockWsFactory),
+    ).toThrow("AlpacaStreamSource requires non-empty keyId and secretKey in config");
+  });
+
+  it("throws when both credentials are missing", () => {
+    expect(
+      () =>
+        new AlpacaStreamSource(
+          createConfig({ keyId: undefined, secretKey: undefined }),
+          mockWsFactory,
+        ),
+    ).toThrow("AlpacaStreamSource requires non-empty keyId and secretKey in config");
+  });
+
+  it("reconnects after unexpected close while started", async () => {
+    const source = new AlpacaStreamSource(createConfig(), mockWsFactory);
+    await source.start();
+
+    expect(mockWsInstances).toHaveLength(1);
+    const ws1 = mockWsInstances[0]!;
+
+    // Simulate the server closing the connection unexpectedly
+    ws1.emit("close");
+
+    // Advance past the first reconnect delay (1000ms * 2^0 = 1000ms)
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // A second WebSocket instance should have been created
+    expect(mockWsInstances).toHaveLength(2);
+    expect(mockWsInstances[1]!.url).toBe("wss://stream.data.alpaca.markets/v2/iex");
+
+    await source.stop();
+  });
+
+  it("stops reconnecting after stop() is called", async () => {
+    const source = new AlpacaStreamSource(createConfig(), mockWsFactory);
+    await source.start();
+
+    const ws1 = mockWsInstances[0]!;
+    // Emit close to trigger reconnect scheduling
+    ws1.emit("close");
+
+    // Stop before the timer fires
+    await source.stop();
+
+    // Advance time past when reconnect would have fired
+    await vi.advanceTimersByTimeAsync(5000);
+
+    // Only 1 WS should have been created (the original)
+    expect(mockWsInstances).toHaveLength(1);
+  });
+
+  it("error messages from Alpaca increment failCount", async () => {
+    const source = new AlpacaStreamSource(createConfig(), mockWsFactory);
+    await source.start();
+
+    const ws = mockWsInstances[0]!;
+    ws.simulateMessage([{ T: "success", msg: "connected" }]);
+    ws.simulateMessage([{ T: "success", msg: "authenticated" }]);
+
+    // Authenticated => failCount reset to 0
+    const healthBefore = await source.healthCheck();
+    expect(healthBefore.failCount).toBe(0);
+
+    // Simulate an error message from the server
+    ws.simulateMessage([{ T: "error", msg: "auth timeout", code: 404 }]);
+
+    const healthAfter = await source.healthCheck();
+    expect(healthAfter.failCount).toBe(1);
+    expect(healthAfter.lastFailure).toBeDefined();
+
+    await source.stop();
+  });
+
+  it("JSON parse failure increments failCount", async () => {
+    const source = new AlpacaStreamSource(createConfig(), mockWsFactory);
+    await source.start();
+
+    const ws = mockWsInstances[0]!;
+
+    // Send raw invalid JSON directly (bypass simulateMessage which auto-stringifies)
+    ws.emit("message", { data: "this is not valid JSON{{{" });
+
+    const health = await source.healthCheck();
+    expect(health.failCount).toBe(1);
+    expect(health.lastFailure).toBeDefined();
+
+    await source.stop();
+  });
 });

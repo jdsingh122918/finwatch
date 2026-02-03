@@ -1,4 +1,5 @@
 import type { DataTick } from "@finwatch/shared";
+import { createLogger } from "../utils/logger.js";
 
 export type AlpacaBackfillConfig = {
   sourceId: string;
@@ -23,12 +24,14 @@ type BarsResponse = {
 
 export class AlpacaBackfill {
   private config: AlpacaBackfillConfig;
+  private log = createLogger("alpaca-backfill");
 
   constructor(config: AlpacaBackfillConfig) {
     this.config = config;
   }
 
   async fetchBars(symbol: string, days: number): Promise<DataTick[]> {
+    this.log.info("Fetching bars", { symbol, days });
     const end = new Date();
     const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
 
@@ -75,8 +78,12 @@ export class AlpacaBackfill {
   async fetchAllSymbols(symbols: string[], days: number): Promise<DataTick[]> {
     const allTicks: DataTick[] = [];
     for (const symbol of symbols) {
-      const ticks = await this.fetchBars(symbol, days);
-      allTicks.push(...ticks);
+      try {
+        const ticks = await this.fetchBars(symbol, days);
+        allTicks.push(...ticks);
+      } catch {
+        this.log.warn("Failed to fetch bars for symbol, skipping", { symbol });
+      }
     }
     return allTicks;
   }

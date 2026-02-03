@@ -5,7 +5,6 @@ import type {
   PortfolioPosition,
   TradeAuditEntry,
   TradeAction,
-  TradingMode,
 } from "@finwatch/shared";
 
 const action: TradeAction = {

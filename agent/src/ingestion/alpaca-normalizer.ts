@@ -1,4 +1,7 @@
 import type { DataTick } from "@finwatch/shared";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("alpaca-normalizer");
 
 export type AlpacaBarMessage = {
   T: "b";
@@ -32,7 +35,12 @@ export type AlpacaQuoteMessage = {
 export type AlpacaMessage = AlpacaBarMessage | AlpacaTradeMessage | AlpacaQuoteMessage;
 
 function parseTimestamp(iso: string): number {
-  return new Date(iso).getTime();
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) {
+    log.error("Invalid timestamp", { iso });
+    throw new Error(`Invalid timestamp: "${iso}"`);
+  }
+  return ts;
 }
 
 export function normalizeAlpacaBar(sourceId: string, bar: AlpacaBarMessage): DataTick {

@@ -1,4 +1,5 @@
 import type { TradingMode } from "@finwatch/shared";
+import { createLogger } from "../utils/logger.js";
 
 export type GateThresholds = {
   minPaperDays: number;
@@ -26,6 +27,7 @@ const DEFAULT_THRESHOLDS: GateThresholds = {
 };
 
 export class TradingGate {
+  private log = createLogger("trading-gate");
   private _mode: TradingMode = "paper";
   private _killed = false;
   private thresholds: GateThresholds;
@@ -65,6 +67,7 @@ export class TradingGate {
   setMode(mode: TradingMode, history: PaperHistory): SetModeResult {
     if (mode === "paper") {
       this._mode = "paper";
+      this.log.info("Trading mode changed", { mode });
       return { success: true, reasons: [] };
     }
 
@@ -78,14 +81,17 @@ export class TradingGate {
 
     const check = this.canGoLive(history);
     if (!check.allowed) {
+      this.log.warn("Live mode rejected", { reasons: check.reasons });
       return { success: false, reasons: check.reasons };
     }
 
     this._mode = "live";
+    this.log.info("Trading mode changed", { mode });
     return { success: true, reasons: [] };
   }
 
   killSwitch(): void {
+    this.log.warn("Kill switch activated");
     this._mode = "paper";
     this._killed = true;
     this.onKill?.();

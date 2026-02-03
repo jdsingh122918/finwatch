@@ -1,5 +1,6 @@
 import type { PortfolioPosition } from "@finwatch/shared";
 import type { PositionLookup } from "./trade-generator.js";
+import { createLogger } from "../utils/logger.js";
 
 export type PositionTrackerConfig = {
   keyId: string;
@@ -17,6 +18,7 @@ type AlpacaPositionResponse = {
 
 export class PositionTracker implements PositionLookup {
   private config: PositionTrackerConfig;
+  private log = createLogger("position-tracker");
   private positions: Map<string, PortfolioPosition> = new Map();
 
   onChange?: (positions: PortfolioPosition[]) => void;
@@ -26,6 +28,7 @@ export class PositionTracker implements PositionLookup {
   }
 
   async sync(): Promise<void> {
+    this.log.info("Syncing positions from Alpaca");
     const url = `${this.config.baseUrl}/v2/positions`;
     const response = await globalThis.fetch(url, {
       headers: {
@@ -35,22 +38,45 @@ export class PositionTracker implements PositionLookup {
     });
 
     if (!response.ok) {
+      this.log.error("Failed to sync positions", { status: response.status });
       const text = await response.text();
       throw new Error(`Alpaca positions API returned HTTP ${response.status}: ${text}`);
     }
 
     const data = (await response.json()) as AlpacaPositionResponse[];
 
-    this.positions.clear();
+    const parsed: PortfolioPosition[] = [];
     for (const raw of data) {
-      const position: PortfolioPosition = {
+      const qty = parseFloat(raw.qty);
+      const avgEntry = parseFloat(raw.avg_entry_price);
+      const currentPrice = parseFloat(raw.current_price);
+      const unrealizedPnl = parseFloat(raw.unrealized_pl);
+
+      if (
+        !Number.isFinite(qty) ||
+        !Number.isFinite(avgEntry) ||
+        !Number.isFinite(currentPrice) ||
+        !Number.isFinite(unrealizedPnl)
+      ) {
+        this.log.warn("Skipping position with invalid numeric data", { symbol: raw.symbol });
+        continue; // skip corrupt position data
+      }
+
+      parsed.push({
         symbol: raw.symbol,
-        qty: parseFloat(raw.qty),
-        avgEntry: parseFloat(raw.avg_entry_price),
-        currentPrice: parseFloat(raw.current_price),
-        unrealizedPnl: parseFloat(raw.unrealized_pl),
-      };
-      this.positions.set(position.symbol, position);
+        qty,
+        avgEntry,
+        currentPrice,
+        unrealizedPnl,
+      });
+    }
+
+    this.log.info("Positions synced", { count: parsed.length });
+
+    // Replace atomically only after all positions are validated
+    this.positions.clear();
+    for (const pos of parsed) {
+      this.positions.set(pos.symbol, pos);
     }
 
     this.onChange?.(this.getPositions());

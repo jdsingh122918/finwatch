@@ -195,6 +195,59 @@ describe("PaperExecutor", () => {
     expect(executor.getHistory()[0]!.outcome).toBe("profit");
   });
 
+  it("resolveOutcome returns true for existing audit entry", async () => {
+    const executor = new PaperExecutor({
+      keyId: "KEY",
+      secretKey: "SECRET",
+      baseUrl: "https://paper-api.alpaca.markets",
+    });
+
+    await executor.execute(makeAction());
+    const auditId = executor.getHistory()[0]!.id;
+
+    expect(executor.resolveOutcome(auditId, "profit")).toBe(true);
+  });
+
+  it("resolveOutcome returns false for non-existent audit ID", () => {
+    const executor = new PaperExecutor({
+      keyId: "KEY",
+      secretKey: "SECRET",
+      baseUrl: "https://paper-api.alpaca.markets",
+    });
+
+    expect(executor.resolveOutcome("nonexistent-id", "profit")).toBe(false);
+  });
+
+  it("throws wrapped error on network failure", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
+
+    const executor = new PaperExecutor({
+      keyId: "KEY",
+      secretKey: "SECRET",
+      baseUrl: "https://paper-api.alpaca.markets",
+    });
+
+    await expect(executor.execute(makeAction())).rejects.toThrow(
+      "Order request failed for buy 10 AAPL: Network error",
+    );
+  });
+
+  it("passes AbortController signal to fetch", async () => {
+    const mockFetch = makeMockFetch();
+    globalThis.fetch = mockFetch;
+
+    const executor = new PaperExecutor({
+      keyId: "KEY",
+      secretKey: "SECRET",
+      baseUrl: "https://paper-api.alpaca.markets",
+    });
+
+    await executor.execute(makeAction());
+
+    const init = (mockFetch as ReturnType<typeof vi.fn>).mock.calls[0]![1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("throws on Alpaca API error", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,

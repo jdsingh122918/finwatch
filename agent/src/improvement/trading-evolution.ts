@@ -1,4 +1,5 @@
 import type { TradeAuditEntry, TradeOutcome } from "@finwatch/shared";
+import { createLogger } from "../utils/logger.js";
 
 export type SymbolMetrics = {
   count: number;
@@ -30,7 +31,10 @@ function computeWinRate(wins: number, total: number): number {
 }
 
 export class TradingPerformanceAnalyzer {
+  private log = createLogger("trading-evolution");
+
   analyze(history: TradeAuditEntry[]): TradingMetrics {
+    this.log.info("Analyzing trading performance", { totalEntries: history.length });
     const resolved = history.filter((e) => RESOLVED_OUTCOMES.has(e.outcome));
     const wins = resolved.filter((e) => e.outcome === "profit").length;
 
@@ -73,6 +77,7 @@ export class TradingPerformanceAnalyzer {
   }
 
   generateReport(history: TradeAuditEntry[]): string {
+    this.log.info("Generating trading performance report");
     const metrics = this.analyze(history);
     const lines: string[] = [];
 

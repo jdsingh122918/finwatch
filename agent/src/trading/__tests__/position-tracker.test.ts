@@ -206,6 +206,32 @@ describe("PositionTracker", () => {
     await expect(tracker.sync()).rejects.toThrow();
   });
 
+  it("skips positions with NaN values", async () => {
+    const positionsWithNaN = [
+      ...MOCK_POSITIONS_RESPONSE,
+      {
+        symbol: "BAD",
+        qty: "not-a-number",
+        avg_entry_price: "180.00",
+        current_price: "185.00",
+        unrealized_pl: "500.00",
+      },
+    ];
+    globalThis.fetch = makeMockFetch(positionsWithNaN);
+
+    const tracker = new PositionTracker({
+      keyId: "KEY",
+      secretKey: "SECRET",
+      baseUrl: "https://paper-api.alpaca.markets",
+    });
+
+    await tracker.sync();
+    const positions = tracker.getPositions();
+
+    expect(positions).toHaveLength(2);
+    expect(positions.find((p) => p.symbol === "BAD")).toBeUndefined();
+  });
+
   it("totalExposure sums absolute position values", async () => {
     const tracker = new PositionTracker({
       keyId: "KEY",

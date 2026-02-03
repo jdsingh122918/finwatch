@@ -10,6 +10,7 @@ import type {
   AlpacaTradeMessage,
   AlpacaQuoteMessage,
 } from "./alpaca-normalizer.js";
+import { createLogger } from "../utils/logger.js";
 
 type AlpacaWsMessage =
   | { T: "success"; msg: string }
@@ -38,6 +39,7 @@ export class AlpacaStreamSource implements DataSource {
   readonly id: string;
   readonly config: SourceConfig;
 
+  private log = createLogger("alpaca-stream");
   private feed: string;
   private symbols: string[];
   private channels: string[];
@@ -52,6 +54,10 @@ export class AlpacaStreamSource implements DataSource {
   private failCount = 0;
   private lastSuccess = 0;
   private lastFailure: number | undefined;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly maxReconnectAttempts = 10;
+  private readonly baseReconnectDelayMs = 1000;
 
   constructor(config: SourceConfig, wsFactory: WsFactory) {
     this.id = config.id;
@@ -62,20 +68,29 @@ export class AlpacaStreamSource implements DataSource {
     this.channels = (c.channels as string[]) ?? ["trades", "quotes", "bars"];
     this.keyId = (c.keyId as string) ?? "";
     this.secretKey = (c.secretKey as string) ?? "";
+    if (!this.keyId || !this.secretKey) {
+      throw new Error("AlpacaStreamSource requires non-empty keyId and secretKey in config");
+    }
     this.wsFactory = wsFactory;
   }
 
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
+    this.log.info("Starting Alpaca stream", { feed: this.feed, symbols: this.symbols });
     this.connect();
   }
 
   async stop(): Promise<void> {
     if (!this.started) return;
+    this.log.info("Stopping Alpaca stream");
     this.started = false;
     this.authenticated = false;
     this.tickBuffer = [];
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -112,6 +127,7 @@ export class AlpacaStreamSource implements DataSource {
 
   private connect(): void {
     const endpoint = WS_ENDPOINTS[this.feed] ?? WS_ENDPOINTS.iex!;
+    this.log.info("Connecting to WebSocket", { endpoint });
     this.ws = this.wsFactory(endpoint);
 
     this.ws.on("open", () => {
@@ -125,11 +141,30 @@ export class AlpacaStreamSource implements DataSource {
     this.ws.on("error", () => {
       this.failCount++;
       this.lastFailure = Date.now();
+      this.log.error("WebSocket error", { failCount: this.failCount });
     });
 
     this.ws.on("close", () => {
       this.authenticated = false;
+      this.log.warn("WebSocket closed", { willReconnect: this.started });
+      if (this.started) {
+        this.scheduleReconnect();
+      }
     });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      return; // give up after max attempts
+    }
+    const delay = this.baseReconnectDelayMs * Math.pow(2, this.reconnectAttempts);
+    this.reconnectAttempts++;
+    this.log.info("Scheduling reconnect", { attempt: this.reconnectAttempts, delayMs: delay });
+    this.reconnectTimer = setTimeout(() => {
+      if (this.started) {
+        this.connect();
+      }
+    }, delay);
   }
 
   private handleMessage(event: unknown): void {
@@ -144,6 +179,9 @@ export class AlpacaStreamSource implements DataSource {
     try {
       messages = JSON.parse(raw) as AlpacaWsMessage[];
     } catch {
+      this.failCount++;
+      this.lastFailure = Date.now();
+      this.log.warn("Failed to parse WebSocket message", { failCount: this.failCount });
       return;
     }
 
@@ -175,7 +213,14 @@ export class AlpacaStreamSource implements DataSource {
           this.lastSuccess = Date.now();
           this.failCount = 0;
           break;
-        // Ignore subscription, error, and other control messages
+        case "error": {
+          const errMsg = msg as { T: "error"; msg: string; code: number };
+          this.log.error("Alpaca error message", { msg: errMsg.msg, code: errMsg.code });
+          this.failCount++;
+          this.lastFailure = Date.now();
+          break;
+        }
+        // Ignore subscription and other control messages
       }
     }
   }
@@ -187,19 +232,27 @@ export class AlpacaStreamSource implements DataSource {
       this.authenticated = true;
       this.lastSuccess = Date.now();
       this.failCount = 0;
+      this.reconnectAttempts = 0;
+      this.log.info("Authenticated with Alpaca");
       this.sendSubscribe();
     }
   }
 
   private sendAuth(): void {
     if (!this.ws) return;
-    this.ws.send(
-      JSON.stringify({
-        action: "auth",
-        key: this.keyId,
-        secret: this.secretKey,
-      }),
-    );
+    try {
+      this.ws.send(
+        JSON.stringify({
+          action: "auth",
+          key: this.keyId,
+          secret: this.secretKey,
+        }),
+      );
+    } catch {
+      this.failCount++;
+      this.lastFailure = Date.now();
+      this.log.warn("Failed to send WebSocket message", { failCount: this.failCount });
+    }
   }
 
   private sendSubscribe(): void {
@@ -208,6 +261,12 @@ export class AlpacaStreamSource implements DataSource {
     if (this.channels.includes("trades")) sub.trades = this.symbols;
     if (this.channels.includes("quotes")) sub.quotes = this.symbols;
     if (this.channels.includes("bars")) sub.bars = this.symbols;
-    this.ws.send(JSON.stringify(sub));
+    try {
+      this.ws.send(JSON.stringify(sub));
+    } catch {
+      this.failCount++;
+      this.lastFailure = Date.now();
+      this.log.warn("Failed to send WebSocket message", { failCount: this.failCount });
+    }
   }
 }

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Anomaly } from "@finwatch/shared";
-import type { TradeAction } from "@finwatch/shared";
 import { TradeGenerator } from "../trade-generator.js";
 import type { PositionLookup } from "../trade-generator.js";
 

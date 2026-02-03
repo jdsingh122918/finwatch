@@ -1,4 +1,5 @@
 import type { TradeAction, RiskLimits } from "@finwatch/shared";
+import { createLogger } from "../utils/logger.js";
 
 export type RiskContext = {
   currentPrice: number;
@@ -6,6 +7,8 @@ export type RiskContext = {
   dailyTradeCount: number;
   lastTradeTimestamp: number | undefined;
   lastTradeSymbol?: string;
+  unrealizedPnl?: number;
+  portfolioValue?: number;
 };
 
 export type RiskCheckResult = {
@@ -15,6 +18,7 @@ export type RiskCheckResult = {
 };
 
 export class RiskManager {
+  private log = createLogger("risk-manager");
   private limits: RiskLimits;
 
   constructor(limits: RiskLimits) {
@@ -54,6 +58,24 @@ export class RiskManager {
       Date.now() - ctx.lastTradeTimestamp < this.limits.cooldownMs
     ) {
       violations.push("cooldown");
+    }
+
+    // Maximum loss percentage check
+    limitsChecked.push("maxLossPct");
+    if (
+      this.limits.maxLossPct > 0 &&
+      ctx.portfolioValue !== undefined &&
+      ctx.unrealizedPnl !== undefined &&
+      ctx.portfolioValue > 0
+    ) {
+      const lossPct = Math.abs(Math.min(0, ctx.unrealizedPnl)) / ctx.portfolioValue * 100;
+      if (lossPct >= this.limits.maxLossPct) {
+        violations.push("maxLossPct");
+      }
+    }
+
+    if (violations.length > 0) {
+      this.log.warn("Risk violation detected", { violations, symbol: action.symbol });
     }
 
     return {

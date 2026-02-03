@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TradeAction, RiskLimits, TradeAuditEntry } from "@finwatch/shared";
+import type { TradeAction, RiskLimits } from "@finwatch/shared";
 import { RiskManager } from "../risk-manager.js";
-import type { RiskCheckResult } from "../risk-manager.js";
 
 function makeAction(overrides: Partial<TradeAction> = {}): TradeAction {
   return {
@@ -143,6 +142,21 @@ describe("RiskManager", () => {
     expect(result.approved).toBe(true);
   });
 
+  it("rejects trade when unrealized loss exceeds maxLossPct", () => {
+    const result = rm.check(makeAction({ qty: 1 }), {
+      currentPrice: 150,
+      currentExposure: 0,
+      dailyTradeCount: 0,
+      lastTradeTimestamp: undefined,
+      unrealizedPnl: -6000, // 6% loss on 100k portfolio
+      portfolioValue: 100000,
+    });
+
+    expect(result.approved).toBe(false);
+    expect(result.violations).toContain("maxLossPct");
+    expect(result.limitsChecked).toContain("maxLossPct");
+  });
+
   it("records all limits checked in result", () => {
     const result = rm.check(makeAction(), {
       currentPrice: 100,
@@ -155,6 +169,7 @@ describe("RiskManager", () => {
     expect(result.limitsChecked).toContain("maxExposure");
     expect(result.limitsChecked).toContain("maxDailyTrades");
     expect(result.limitsChecked).toContain("cooldown");
+    expect(result.limitsChecked).toContain("maxLossPct");
   });
 
   it("uses paper limits when mode is paper", () => {

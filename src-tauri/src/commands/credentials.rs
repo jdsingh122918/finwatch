@@ -7,6 +7,12 @@ pub struct AlpacaCredentials {
     pub secret_key: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AlpacaCredentialsMasked {
+    pub key_id: String,
+    pub has_secret: bool,
+}
+
 /// Store credentials for a given mode ("paper" or "live").
 pub fn credentials_set_db(
     pool: &DbPool,
@@ -34,11 +40,15 @@ pub fn credentials_get_db(
     validate_mode(mode)?;
     let key = credential_key(mode);
     let conn = pool.get().map_err(|e| e.to_string())?;
-    let result: Option<String> = conn
-        .query_row("SELECT value FROM config WHERE key = ?1", [&key], |row| {
-            row.get(0)
-        })
-        .ok();
+    let result: Option<String> = match conn.query_row(
+        "SELECT value FROM config WHERE key = ?1",
+        [&key],
+        |row| row.get(0),
+    ) {
+        Ok(json) => Some(json),
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(e) => return Err(e.to_string()),
+    };
     match result {
         Some(json) => {
             let creds: AlpacaCredentials =
@@ -92,8 +102,12 @@ pub fn credentials_set(
 pub fn credentials_get(
     pool: tauri::State<'_, DbPool>,
     mode: String,
-) -> Result<Option<AlpacaCredentials>, String> {
-    credentials_get_db(&pool, &mode)
+) -> Result<Option<AlpacaCredentialsMasked>, String> {
+    let creds = credentials_get_db(&pool, &mode)?;
+    Ok(creds.map(|c| AlpacaCredentialsMasked {
+        key_id: c.key_id,
+        has_secret: !c.secret_key.is_empty(),
+    }))
 }
 
 #[tauri::command]
@@ -191,6 +205,19 @@ mod tests {
         let pool = test_pool();
         let result = credentials_get_db(&pool, "paper").unwrap();
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn credentials_get_db_returns_full_credentials() {
+        let pool = test_pool();
+        let creds = AlpacaCredentials {
+            key_id: "PKFULL123".to_string(),
+            secret_key: "full_secret_456".to_string(),
+        };
+        credentials_set_db(&pool, "paper", &creds).unwrap();
+        let result = credentials_get_db(&pool, "paper").unwrap().unwrap();
+        assert_eq!(result.key_id, "PKFULL123");
+        assert_eq!(result.secret_key, "full_secret_456");
     }
 
     #[test]

@@ -1,4 +1,5 @@
 import type { Anomaly, TradeAction } from "@finwatch/shared";
+import { createLogger } from "../utils/logger.js";
 
 export type PositionLookup = {
   hasPosition(symbol: string): boolean;
@@ -42,6 +43,7 @@ function computeConfidence(anomaly: Anomaly): number {
 
 export class TradeGenerator {
   private positions: PositionLookup;
+  private log = createLogger("trade-generator");
   onAction?: (action: TradeAction) => void;
 
   constructor(positions: PositionLookup) {
@@ -51,11 +53,13 @@ export class TradeGenerator {
   evaluate(anomaly: Anomaly): TradeAction | null {
     // Only act on high/critical severity
     if (!ACTIONABLE_SEVERITIES.has(anomaly.severity)) {
+      this.log.debug("Skipped anomaly", { reason: `severity too low: ${anomaly.severity}` });
       return null;
     }
 
     // Must have a symbol to trade
     if (!anomaly.symbol) {
+      this.log.debug("Skipped anomaly", { reason: "no symbol" });
       return null;
     }
 
@@ -81,7 +85,7 @@ export class TradeGenerator {
       case "volume_drop":
         // Volume drop → buy (accumulation signal)
         if (holding) {
-          // Don't double up on existing position
+          this.log.debug("Skipped anomaly", { reason: "already holding position for volume_drop signal" });
           return null;
         }
         side = "buy";
@@ -108,6 +112,7 @@ export class TradeGenerator {
       anomalyId: anomaly.id,
     };
 
+    this.log.info("Generated trade action", { symbol, side, qty });
     this.onAction?.(action);
     return action;
   }

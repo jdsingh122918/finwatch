@@ -157,6 +157,35 @@ describe("AlpacaBackfill", () => {
     await expect(backfill.fetchBars("AAPL", 30)).rejects.toThrow();
   });
 
+  it("returns partial results when one symbol fails in fetchAllSymbols", async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn<[string, RequestInit?], Promise<Response>>().mockImplementation(async (url: string) => {
+      callCount++;
+      if (url.includes("/BADTICKER/")) {
+        return { ok: false, status: 404, text: async () => "Not Found" } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ bars: MOCK_BARS, next_page_token: null }),
+      } as Response;
+    });
+
+    const backfill = new AlpacaBackfill({
+      sourceId: "alpaca-stream",
+      keyId: "KEY",
+      secretKey: "SECRET",
+      baseUrl: "https://data.alpaca.markets",
+    });
+
+    const ticks = await backfill.fetchAllSymbols(["AAPL", "BADTICKER", "TSLA"], 30);
+
+    // BADTICKER should be skipped; AAPL + TSLA each return 3 bars
+    expect(ticks).toHaveLength(6);
+    const symbols = new Set(ticks.map((t) => t.symbol));
+    expect(symbols).toEqual(new Set(["AAPL", "TSLA"]));
+  });
+
   it("returns empty array when no bars returned", async () => {
     globalThis.fetch = makeMockFetch([]);
 

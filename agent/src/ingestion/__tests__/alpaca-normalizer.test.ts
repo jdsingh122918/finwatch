@@ -81,6 +81,24 @@ describe("normalizeAlpacaBar", () => {
   });
 });
 
+describe("parseTimestamp validation", () => {
+  it("throws on invalid timestamp", () => {
+    const bar = {
+      T: "b" as const,
+      S: "AAPL",
+      o: 100,
+      h: 110,
+      l: 90,
+      c: 105,
+      v: 500,
+      t: "not-a-date",
+    };
+    expect(() => normalizeAlpacaBar(SOURCE_ID, bar)).toThrow(
+      'Invalid timestamp: "not-a-date"',
+    );
+  });
+});
+
 describe("normalizeAlpacaTrade", () => {
   it("maps trade message to DataTick with price and size", () => {
     const trade = {
