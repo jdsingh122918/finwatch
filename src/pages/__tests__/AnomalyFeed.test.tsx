@@ -1,76 +1,58 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AnomalyFeed } from "../AnomalyFeed.js";
-import type { Anomaly, FeedbackVerdict } from "@finwatch/shared";
 
-const anomaly: Anomaly = {
+const mockAnomaly = {
   id: "a1",
-  severity: "high",
   source: "yahoo",
+  severity: "critical" as const,
   symbol: "AAPL",
-  timestamp: 1000,
-  description: "Volume spike detected",
-  metrics: { volume: 5e6 },
-  preScreenScore: 0.85,
-  sessionId: "s1",
+  description: "Price spike detected",
+  timestamp: Date.now(),
+  metadata: {},
 };
 
 describe("AnomalyFeed", () => {
-  it("renders anomaly description", () => {
-    render(
-      <AnomalyFeed
-        anomalies={[anomaly]}
-        feedbackMap={new Map()}
-        onFeedback={vi.fn()}
-      />,
-    );
-    expect(screen.getByText(/Volume spike detected/)).toBeTruthy();
-  });
-
-  it("shows severity badge", () => {
-    render(
-      <AnomalyFeed
-        anomalies={[anomaly]}
-        feedbackMap={new Map()}
-        onFeedback={vi.fn()}
-      />,
-    );
-    expect(screen.getByText(/high/i)).toBeTruthy();
-  });
-
-  it("calls onFeedback when button clicked", () => {
-    const onFeedback = vi.fn();
-    render(
-      <AnomalyFeed
-        anomalies={[anomaly]}
-        feedbackMap={new Map()}
-        onFeedback={onFeedback}
-      />,
-    );
-    fireEvent.click(screen.getByText(/confirm/i));
-    expect(onFeedback).toHaveBeenCalledWith("a1", "confirmed");
+  it("renders heading", () => {
+    render(<AnomalyFeed anomalies={[]} feedbackMap={new Map()} onFeedback={vi.fn()} />);
+    expect(screen.getByText("Anomaly Feed")).toBeTruthy();
   });
 
   it("shows empty state", () => {
-    render(
-      <AnomalyFeed
-        anomalies={[]}
-        feedbackMap={new Map()}
-        onFeedback={vi.fn()}
-      />,
-    );
+    render(<AnomalyFeed anomalies={[]} feedbackMap={new Map()} onFeedback={vi.fn()} />);
     expect(screen.getByText(/no anomalies/i)).toBeTruthy();
   });
 
-  it("shows feedback status for submitted anomalies", () => {
-    const map = new Map<string, FeedbackVerdict>([["a1", "confirmed"]]);
+  it("renders anomaly with severity dot", () => {
     render(
-      <AnomalyFeed
-        anomalies={[anomaly]}
-        feedbackMap={map}
-        onFeedback={vi.fn()}
-      />,
+      <AnomalyFeed anomalies={[mockAnomaly]} feedbackMap={new Map()} onFeedback={vi.fn()} />,
     );
-    expect(screen.getByText(/confirmed/i)).toBeTruthy();
+    expect(screen.getByText("AAPL")).toBeTruthy();
+    expect(screen.getByText(/price spike/i)).toBeTruthy();
+  });
+
+  it("renders feedback buttons", () => {
+    render(
+      <AnomalyFeed anomalies={[mockAnomaly]} feedbackMap={new Map()} onFeedback={vi.fn()} />,
+    );
+    expect(screen.getByText("CONFIRM")).toBeTruthy();
+    expect(screen.getByText("FALSE+")).toBeTruthy();
+    expect(screen.getByText("REVIEW")).toBeTruthy();
+  });
+
+  it("calls onFeedback when button clicked", () => {
+    const handler = vi.fn();
+    render(
+      <AnomalyFeed anomalies={[mockAnomaly]} feedbackMap={new Map()} onFeedback={handler} />,
+    );
+    fireEvent.click(screen.getByText("CONFIRM"));
+    expect(handler).toHaveBeenCalledWith("a1", "confirmed");
+  });
+
+  it("shows verdict when feedback exists", () => {
+    const map = new Map([["a1", "confirmed" as const]]);
+    render(<AnomalyFeed anomalies={[mockAnomaly]} feedbackMap={map} onFeedback={vi.fn()} />);
+    expect(screen.getByText("confirmed")).toBeTruthy();
+    expect(screen.queryByText("CONFIRM")).toBeNull();
   });
 });

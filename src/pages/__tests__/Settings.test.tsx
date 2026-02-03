@@ -3,20 +3,20 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { Settings } from "../Settings.js";
 
 describe("Settings", () => {
-  it("renders config JSON", () => {
-    render(
-      <Settings
-        config='{"monitor":{"analysisIntervalMs":60000}}'
-        onSave={vi.fn()}
-      />,
-    );
-    expect(screen.getByText(/analysisIntervalMs/)).toBeTruthy();
+  it("renders heading", () => {
+    render(<Settings config="{}" onSave={vi.fn()} />);
+    expect(screen.getByText("Settings")).toBeTruthy();
   });
 
-  it("calls onSave", () => {
-    const onSave = vi.fn();
-    render(<Settings config="{}" onSave={onSave} />);
-    fireEvent.click(screen.getByText(/save/i));
-    expect(onSave).toHaveBeenCalled();
+  it("renders config textarea", () => {
+    render(<Settings config='{"key":"val"}' onSave={vi.fn()} />);
+    expect(screen.getByRole("textbox")).toBeTruthy();
+  });
+
+  it("calls onSave with current value", () => {
+    const handler = vi.fn();
+    render(<Settings config="{}" onSave={handler} />);
+    fireEvent.click(screen.getByText("SAVE"));
+    expect(handler).toHaveBeenCalledWith("{}");
   });
 });

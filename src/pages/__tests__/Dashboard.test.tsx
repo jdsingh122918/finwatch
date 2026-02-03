@@ -5,12 +5,12 @@ import { Dashboard } from "../Dashboard.js";
 describe("Dashboard", () => {
   it("renders dashboard heading", () => {
     render(<Dashboard ticks={[]} />);
-    expect(screen.getByText("Dashboard")).toBeTruthy();
+    expect(screen.getByText("Market Data")).toBeTruthy();
   });
 
-  it("shows 'No data' when no ticks", () => {
+  it("shows empty state when no ticks", () => {
     render(<Dashboard ticks={[]} />);
-    expect(screen.getByText(/no data/i)).toBeTruthy();
+    expect(screen.getByText(/waiting for data/i)).toBeTruthy();
   });
 
   it("renders tick data when available", () => {
@@ -24,29 +24,17 @@ describe("Dashboard", () => {
       },
     ];
     render(<Dashboard ticks={ticks} />);
-    expect(screen.getByText(/AAPL/)).toBeTruthy();
+    expect(screen.getByText("AAPL")).toBeTruthy();
     expect(screen.getByText(/150.25/)).toBeTruthy();
   });
 
   it("shows multiple symbols", () => {
     const ticks = [
-      {
-        sourceId: "yahoo",
-        timestamp: 1,
-        symbol: "AAPL",
-        metrics: { price: 150 },
-        metadata: {},
-      },
-      {
-        sourceId: "yahoo",
-        timestamp: 2,
-        symbol: "GOOGL",
-        metrics: { price: 175 },
-        metadata: {},
-      },
+      { sourceId: "yahoo", timestamp: 1, symbol: "AAPL", metrics: { price: 150 }, metadata: {} },
+      { sourceId: "yahoo", timestamp: 2, symbol: "GOOGL", metrics: { price: 175 }, metadata: {} },
     ];
     render(<Dashboard ticks={ticks} />);
-    expect(screen.getByText(/AAPL/)).toBeTruthy();
-    expect(screen.getByText(/GOOGL/)).toBeTruthy();
+    expect(screen.getByText("AAPL")).toBeTruthy();
+    expect(screen.getByText("GOOGL")).toBeTruthy();
   });
 });

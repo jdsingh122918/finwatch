@@ -3,23 +3,37 @@ import { render, screen } from "@testing-library/react";
 import { SourceHealth } from "../SourceHealth.js";
 
 describe("SourceHealth", () => {
-  it("renders source statuses", () => {
-    const sources = {
-      yahoo: {
-        sourceId: "yahoo",
-        status: "healthy" as const,
-        lastSuccess: 1000,
-        failCount: 0,
-        latencyMs: 50,
-      },
-    };
-    render(<SourceHealth sources={sources} />);
-    expect(screen.getByText(/yahoo/)).toBeTruthy();
-    expect(screen.getByText(/healthy/i)).toBeTruthy();
+  it("renders heading", () => {
+    render(<SourceHealth sources={{}} />);
+    expect(screen.getByText("Sources")).toBeTruthy();
   });
 
   it("shows empty state", () => {
     render(<SourceHealth sources={{}} />);
     expect(screen.getByText(/no sources/i)).toBeTruthy();
+  });
+
+  it("renders source rows with status", () => {
+    const sources = {
+      yahoo: {
+        sourceId: "yahoo",
+        status: "healthy" as const,
+        latencyMs: 42,
+        failCount: 0,
+        lastSeen: Date.now(),
+      },
+      polygon: {
+        sourceId: "polygon",
+        status: "degraded" as const,
+        latencyMs: 350,
+        failCount: 2,
+        lastSeen: Date.now(),
+      },
+    };
+    render(<SourceHealth sources={sources} />);
+    expect(screen.getByText("yahoo")).toBeTruthy();
+    expect(screen.getByText("HEALTHY")).toBeTruthy();
+    expect(screen.getByText("polygon")).toBeTruthy();
+    expect(screen.getByText("DEGRADED")).toBeTruthy();
   });
 });

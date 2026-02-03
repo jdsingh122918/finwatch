@@ -14,44 +14,31 @@ export function Dashboard({ ticks }: Props) {
 
   return (
     <div>
-      <h1>Dashboard</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-text-muted text-xs uppercase tracking-widest">Market Data</h2>
+        <span className="text-text-muted text-xs">
+          {latestBySymbol.size} symbols
+        </span>
+      </div>
       {ticks.length === 0 ? (
-        <p>No data yet. Waiting for data sources...</p>
+        <p className="text-text-muted">Waiting for data sources...</p>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-            gap: "12px",
-          }}
-        >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {Array.from(latestBySymbol.entries()).map(([symbol, tick]) => (
             <div
               key={symbol}
-              style={{
-                border: "1px solid #333",
-                borderRadius: 8,
-                padding: 12,
-              }}
+              className="bg-bg-surface border border-border rounded-sm p-3"
             >
-              <h3>{symbol}</h3>
+              <div className="text-accent font-bold mb-2">{symbol}</div>
               {Object.entries(tick.metrics).map(([key, val]) => (
-                <div
-                  key={key}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <span>{key}</span>
-                  <span>
-                    {typeof val === "number" ? val.toLocaleString() : val}
-                  </span>
+                <div key={key} className="flex justify-between text-xs py-0.5">
+                  <span className="text-text-muted">{key}</span>
+                  <span>{typeof val === "number" ? val.toLocaleString() : String(val)}</span>
                 </div>
               ))}
-              <small style={{ opacity: 0.6 }}>
+              <div className="text-text-muted text-xs mt-2">
                 {new Date(tick.timestamp).toLocaleTimeString()}
-              </small>
+              </div>
             </div>
           ))}
         </div>

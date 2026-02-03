@@ -2,62 +2,53 @@ import type { AgentStatus, AgentActivity } from "@finwatch/shared";
 
 type Props = { status: AgentStatus; log: AgentActivity[] };
 
-const stateColors: Record<string, string> = {
-  running: "#44ff44",
-  idle: "#888",
-  paused: "#ffcc00",
-  error: "#ff4444",
+const stateColorClass: Record<string, string> = {
+  running: "text-state-running",
+  idle: "text-state-idle",
+  paused: "text-state-paused",
+  error: "text-state-error",
 };
 
 export function AgentLog({ status, log }: Props) {
   return (
     <div>
-      <h1>Agent Activity</h1>
-      <div
-        style={{
-          display: "flex",
-          gap: 16,
-          marginBottom: 16,
-          padding: 12,
-          border: "1px solid #333",
-          borderRadius: 8,
-        }}
-      >
-        <span>
-          State:{" "}
-          <strong style={{ color: stateColors[status.state] }}>
-            {status.state}
-          </strong>
+      <h2 className="text-text-muted text-xs uppercase tracking-widest mb-4">Agent</h2>
+
+      <div className="flex items-center gap-6 mb-4 text-xs">
+        <span className="flex items-center gap-1.5">
+          state:
+          <span className={`font-bold ${stateColorClass[status.state] ?? "text-state-idle"}`}>
+            {status.state.toUpperCase()}
+          </span>
         </span>
-        <span>Cycles: {status.totalCycles}</span>
-        <span>Anomalies: {status.totalAnomalies}</span>
-        <span>Uptime: {Math.floor(status.uptime / 60)}m</span>
+        <span>
+          cycles: <span className="text-text-primary">{status.totalCycles}</span>
+        </span>
+        <span>
+          anomalies: <span className="text-text-primary">{status.totalAnomalies}</span>
+        </span>
+        <span>
+          uptime: <span className="text-text-primary">{Math.floor(status.uptime / 60)}m</span>
+        </span>
       </div>
+
       {log.length === 0 ? (
-        <p>No activity yet.</p>
+        <p className="text-text-muted text-xs">No activity yet.</p>
       ) : (
-        <div
-          style={{
-            fontFamily: "monospace",
-            fontSize: 13,
-            maxHeight: 400,
-            overflow: "auto",
-          }}
-        >
+        <div className="max-h-[calc(100vh-12rem)] overflow-y-auto text-xs">
           {log.map((entry, i) => (
-            <div
-              key={i}
-              style={{ padding: "4px 0", borderBottom: "1px solid #222" }}
-            >
-              <span style={{ opacity: 0.5 }}>
+            <div key={i} className="py-1 border-b border-bg-elevated flex gap-2">
+              <span className="text-text-muted w-20 shrink-0">
                 {new Date(entry.timestamp).toLocaleTimeString()}
-              </span>{" "}
+              </span>
               <span
-                style={{ color: entry.type === "error" ? "#ff4444" : "#ccc" }}
+                className={
+                  entry.type === "error" ? "text-severity-critical" : "text-text-muted"
+                }
               >
                 [{entry.type}]
-              </span>{" "}
-              {entry.message}
+              </span>
+              <span>{entry.message}</span>
             </div>
           ))}
         </div>
