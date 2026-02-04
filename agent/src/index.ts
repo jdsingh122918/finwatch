@@ -1,15 +1,107 @@
+import type { LLMProvider } from "@finwatch/shared";
 import { JsonRpcServer } from "./ipc/json-rpc-server.js";
+import { Orchestrator } from "./orchestrator.js";
+import { AnthropicProvider } from "./providers/anthropic-provider.js";
+import { OpenRouterProvider } from "./providers/openrouter-provider.js";
 
 export { JsonRpcServer } from "./ipc/json-rpc-server.js";
 
-const server = new JsonRpcServer();
+type AgentStartParams = {
+  alpaca: {
+    keyId: string;
+    secretKey: string;
+    symbols: string[];
+    feed: "iex" | "sip";
+  };
+  llm: {
+    anthropicApiKey?: string;
+    openrouterApiKey?: string;
+    model: string;
+    maxTokens: number;
+    temperature: number;
+  };
+};
 
-server.register("ping", async () => ({
-  status: "ok",
-  timestamp: Date.now(),
-}));
+export function createAgentServer(): JsonRpcServer {
+  const server = new JsonRpcServer();
+  let orchestrator: Orchestrator | null = null;
+
+  server.register("ping", async () => ({
+    status: "ok",
+    timestamp: Date.now(),
+  }));
+
+  server.register("agent:start", async (params) => {
+    const p = params as unknown as AgentStartParams;
+
+    if (orchestrator) {
+      await orchestrator.stop();
+    }
+
+    const providers: LLMProvider[] = [];
+    if (p.llm.anthropicApiKey) {
+      providers.push(new AnthropicProvider({ apiKey: p.llm.anthropicApiKey }));
+    }
+    if (p.llm.openrouterApiKey) {
+      providers.push(new OpenRouterProvider({ apiKey: p.llm.openrouterApiKey }));
+    }
+    if (providers.length === 0) {
+      throw new Error("At least one LLM API key is required");
+    }
+
+    orchestrator = new Orchestrator({
+      alpaca: p.alpaca,
+      llm: {
+        providers,
+        model: p.llm.model,
+        maxTokens: p.llm.maxTokens,
+        temperature: p.llm.temperature,
+      },
+      buffer: { flushIntervalMs: 5000, urgentThreshold: 0.8 },
+    });
+
+    // Forward events as JSON-RPC notifications to stdout
+    orchestrator.on("tick", (tick) => {
+      writeNotification("data:tick", tick);
+    });
+    orchestrator.on("anomaly", (anomaly) => {
+      writeNotification("anomaly:detected", anomaly);
+    });
+    orchestrator.on("activity", (activity) => {
+      writeNotification("agent:activity", activity);
+    });
+
+    await orchestrator.start();
+    return { status: "started" };
+  });
+
+  server.register("agent:stop", async () => {
+    if (orchestrator) {
+      await orchestrator.stop();
+      orchestrator = null;
+    }
+    return { status: "stopped" };
+  });
+
+  server.register("agent:status", async () => {
+    if (!orchestrator) {
+      return { state: "idle", totalCycles: 0, totalAnomalies: 0, uptime: 0 };
+    }
+    return orchestrator.status;
+  });
+
+  return server;
+}
+
+/** Write a JSON-RPC notification (no id) to stdout. */
+function writeNotification(method: string, params: unknown): void {
+  const notification = JSON.stringify({ jsonrpc: "2.0", method, params });
+  process.stdout.write(notification + "\n");
+}
 
 export function start(): void {
+  const server = createAgentServer();
+
   process.stdin.setEncoding("utf-8");
   let buffer = "";
 
