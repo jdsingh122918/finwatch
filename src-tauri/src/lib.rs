@@ -10,7 +10,11 @@ pub mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    dotenvy::dotenv().ok();
+    // Load .env from project root (parent of src-tauri/)
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let project_root = manifest_dir.parent().unwrap_or(manifest_dir);
+    let env_path = project_root.join(".env");
+    dotenvy::from_path(&env_path).ok();
     let data_dir = db::finwatch_data_dir();
     let db_path = data_dir.join("state").join("finwatch.sqlite");
     let pool = db::create_pool(&db_path).expect("Failed to create database pool");
