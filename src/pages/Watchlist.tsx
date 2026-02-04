@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { Asset } from "../store/watchlist-slice.js";
 
 const SOFT_LIMIT = 20;
@@ -33,6 +34,13 @@ export function Watchlist({
   onApplyChanges,
   onFetchAssets,
 }: Props) {
+  // Auto-fetch assets on mount when empty
+  useEffect(() => {
+    if (assets.length === 0 && !loading && !error) {
+      onFetchAssets();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const watchlistSet = new Set(watchlist);
 
   // Derive unique categories from assets
@@ -173,10 +181,16 @@ export function Watchlist({
         </div>
       )}
 
-      {/* Empty state: no API key */}
+      {/* Empty state */}
       {!loading && !error && assets.length === 0 && (
         <div className="text-text-muted text-xs py-8 text-center">
-          Configure your Alpaca API key in Settings to browse available tickers.
+          <p>No assets loaded.</p>
+          <button
+            onClick={onFetchAssets}
+            className="mt-2 px-3 py-1 text-xs border border-border rounded-sm text-accent hover:bg-bg-elevated cursor-pointer bg-transparent font-mono"
+          >
+            LOAD ASSETS
+          </button>
         </div>
       )}
     </div>

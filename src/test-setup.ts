@@ -7,7 +7,7 @@ afterEach(() => {
 
 // Mock @tauri-apps/api/core
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+  invoke: vi.fn(() => Promise.resolve([])),
 }));
 
 // Mock @tauri-apps/api/event
