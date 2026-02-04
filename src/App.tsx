@@ -8,19 +8,23 @@ import { AnomalyFeed } from "./pages/AnomalyFeed";
 import { AgentLog } from "./pages/AgentLog";
 import { SourceHealth } from "./pages/SourceHealth";
 import { Settings } from "./pages/Settings";
+import { BacktestConfigPage } from "./pages/BacktestConfig";
+import { BacktestResults } from "./pages/BacktestResults";
 import { createDataSlice } from "./store/data-slice";
 import { createAnomalySlice } from "./store/anomaly-slice";
 import { createAgentSlice } from "./store/agent-slice";
 import { createTradingSlice } from "./store/trading-slice";
+import { createBacktestSlice } from "./store/backtest-slice";
 import type { SourceHealth as SH } from "@finwatch/shared";
 
-const tabs = ["Dashboard", "Anomalies", "Agent", "Sources", "Settings"] as const;
+const tabs = ["Dashboard", "Anomalies", "Agent", "Sources", "Backtest", "Settings"] as const;
 type Tab = (typeof tabs)[number];
 
 const dataStore = createDataSlice();
 const anomalyStore = createAnomalySlice();
 const agentStore = createAgentSlice();
 const tradingStore = createTradingSlice();
+const backtestStore = createBacktestSlice();
 
 declare global {
   interface Window {
@@ -29,6 +33,7 @@ declare global {
       anomaly: typeof anomalyStore;
       agent: typeof agentStore;
       trading: typeof tradingStore;
+      backtest: typeof backtestStore;
       sources: {
         getState: () => { sources: Record<string, SH> };
         setState: (s: Record<string, SH>) => void;
@@ -59,6 +64,7 @@ window.__stores = {
   anomaly: anomalyStore,
   agent: agentStore,
   trading: tradingStore,
+  backtest: backtestStore,
   sources: sourcesStore,
 };
 
@@ -70,6 +76,7 @@ export default function App() {
   const agentState = useSyncExternalStore(agentStore.subscribe, agentStore.getState);
   const sourceState = useSyncExternalStore(sourcesStore.subscribe, sourcesStore.getState);
   const tradingState = useSyncExternalStore(tradingStore.subscribe, tradingStore.getState);
+  const backtestState = useSyncExternalStore(backtestStore.subscribe, backtestStore.getState);
 
   const eventStores = useMemo(() => ({
     addTick: (tick: import("@finwatch/shared").DataTick) => dataStore.getState().addTick(tick),
@@ -101,6 +108,34 @@ export default function App() {
           <AgentLog status={agentState.status} log={agentState.activityLog} />
         )}
         {activeTab === "Sources" && <SourceHealth sources={sourceState.sources} />}
+        {activeTab === "Backtest" && (() => {
+          const selectedRun = backtestState.activeRunId
+            ? backtestState.runs.find((r) => r.id === backtestState.activeRunId)
+            : null;
+          return selectedRun ? (
+            <BacktestResults
+              result={selectedRun}
+              onBack={() => backtestStore.getState().setActiveRunId(null)}
+            />
+          ) : (
+            <BacktestConfigPage
+              progress={backtestState.progress}
+              onProgress={(p) => backtestStore.getState().setProgress(p)}
+              onComplete={(id) => {
+                backtestStore.getState().clearProgress();
+                backtestStore.getState().setActiveRunId(id);
+              }}
+              runs={backtestState.runs.map((r) => ({
+                id: r.id,
+                status: r.status,
+                startDate: r.config.startDate,
+                endDate: r.config.endDate,
+                totalReturnPct: r.metrics?.totalReturnPct,
+              }))}
+              onViewResult={(id) => backtestStore.getState().setActiveRunId(id)}
+            />
+          );
+        })()}
         {activeTab === "Settings" && (
           <Settings
             agentRunning={agentState.status.state === "running"}
