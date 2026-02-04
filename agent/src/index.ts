@@ -1,3 +1,4 @@
+import "dotenv/config";
 import type { LLMProvider } from "@finwatch/shared";
 import { JsonRpcServer } from "./ipc/json-rpc-server.js";
 import { Orchestrator } from "./orchestrator.js";

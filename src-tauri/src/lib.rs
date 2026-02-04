@@ -10,6 +10,7 @@ pub mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    dotenvy::dotenv().ok();
     let data_dir = db::finwatch_data_dir();
     let db_path = data_dir.join("state").join("finwatch.sqlite");
     let pool = db::create_pool(&db_path).expect("Failed to create database pool");
