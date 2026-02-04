@@ -1,4 +1,5 @@
 import { useState, useSyncExternalStore } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { Dashboard } from "./pages/Dashboard";
@@ -90,9 +91,18 @@ export default function App() {
         {activeTab === "Sources" && <SourceHealth sources={sourceState.sources} />}
         {activeTab === "Settings" && (
           <Settings
-            config="{}"
-            onSave={(c) => {
-              console.log(c);
+            agentRunning={agentState.status.state === "running"}
+            onCredentialsSave={(keyId, secret) => {
+              invoke("credentials_set", { mode: "paper", keyId, secretKey: secret });
+            }}
+            onConfigSave={(config) => {
+              invoke("config_update", { patch: JSON.stringify(config) });
+            }}
+            onAgentStart={() => {
+              invoke("agent_start", { config: {} });
+            }}
+            onAgentStop={() => {
+              invoke("agent_stop");
             }}
           />
         )}
