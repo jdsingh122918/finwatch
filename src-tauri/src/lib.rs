@@ -1,3 +1,4 @@
+pub mod bridge;
 pub mod commands;
 pub mod db;
 pub mod events;
@@ -20,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .manage(pool)
+        .manage(bridge::SidecarBridge::new())
         .invoke_handler(tauri::generate_handler![
             commands::agent::agent_start,
             commands::agent::agent_stop,

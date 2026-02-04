@@ -51,12 +51,7 @@ mod tests {
         assert_eq!(parsed["c"], 3);
     }
 
-    #[test]
-    fn agent_status_returns_valid_json() {
-        let status = agent::agent_status();
-        let json = serde_json::to_string(&status).unwrap();
-        assert!(json.contains("\"state\""));
-    }
+    // agent_status now requires Tauri State<SidecarBridge>, tested via bridge module
 
     #[test]
     fn anomalies_insert_and_list() {
