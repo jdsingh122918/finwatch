@@ -74,3 +74,22 @@ export {
   TradeAuditEntrySchema,
   TradeHistoryFilterSchema,
 } from "./trading.js";
+
+export type {
+  BacktestTimeframe,
+  BacktestStatus,
+  TradeSizingStrategy,
+  BacktestConfig,
+  BacktestProgress,
+  BacktestTrade,
+  BacktestMetrics,
+  BacktestResult,
+} from "./backtest.js";
+
+export {
+  BacktestConfigSchema,
+  BacktestProgressSchema,
+  BacktestTradeSchema,
+  BacktestMetricsSchema,
+  BacktestResultSchema,
+} from "./backtest.js";

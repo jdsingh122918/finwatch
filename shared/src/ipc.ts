@@ -10,6 +10,7 @@ import type {
   TradingMode,
   TradeHistoryFilter,
 } from "./trading.js";
+import type { BacktestConfig, BacktestResult, BacktestProgress, BacktestStatus } from "./backtest.js";
 
 // Commands: React -> Rust -> Node.js (request/response)
 export type IpcCommands = {
@@ -28,6 +29,12 @@ export type IpcCommands = {
   "trading:history": (filter?: TradeHistoryFilter) => TradeAuditEntry[];
   "trading:positions": () => PortfolioPosition[];
   "trading:mode": (mode?: TradingMode) => TradingMode;
+  "backtest:start": (config: BacktestConfig) => { backtestId: string };
+  "backtest:cancel": (backtestId: string) => void;
+  "backtest:list": () => BacktestResult[];
+  "backtest:get": (backtestId: string) => BacktestResult;
+  "backtest:delete": (backtestId: string) => void;
+  "backtest:export": (backtestId: string, format: "json" | "csv") => string;
 };
 
 // Events: Node.js -> Rust -> React (push, fire-and-forget)
@@ -41,4 +48,6 @@ export type IpcEvents = {
   "trade:executed": TradeAuditEntry;
   "trade:expired": TradeSuggestion;
   "portfolio:update": PortfolioPosition[];
+  "backtest:progress": BacktestProgress;
+  "backtest:complete": { backtestId: string; status: BacktestStatus };
 };
