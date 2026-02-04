@@ -20,7 +20,7 @@ export function Settings({
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openrouterKey, setOpenrouterKey] = useState("");
   const [symbols, setSymbols] = useState("AAPL, TSLA, MSFT");
-  const [model, setModel] = useState("claude-haiku-35-20241022");
+  const [model, setModel] = useState("claude-3-5-haiku-20241022");
 
   return (
     <div>
@@ -126,7 +126,7 @@ export function Settings({
               onChange={(e) => setModel(e.target.value)}
               className="w-full bg-bg-primary text-text-primary text-xs p-2 rounded-sm border border-border outline-none font-mono focus:border-accent"
             >
-              <option value="claude-haiku-35-20241022">claude-haiku-3.5</option>
+              <option value="claude-3-5-haiku-20241022">claude-haiku-3.5</option>
               <option value="claude-sonnet-4-5-20241022">claude-sonnet-4.5</option>
               <option value="claude-opus-4-5-20251101">claude-opus-4.5</option>
             </select>

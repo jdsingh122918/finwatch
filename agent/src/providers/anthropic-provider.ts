@@ -15,7 +15,7 @@ export type AnthropicProviderOptions = {
 const SUPPORTED_MODELS = [
   "claude-opus-4-5-20251101",
   "claude-sonnet-4-5-20241022",
-  "claude-haiku-35-20241022",
+  "claude-3-5-haiku-20241022",
 ];
 
 export class AnthropicProvider implements LLMProvider {
@@ -96,7 +96,7 @@ export class AnthropicProvider implements LLMProvider {
     try {
       // Simple health check: create a minimal message
       const stream = await this.client.messages.create({
-        model: "claude-haiku-35-20241022",
+        model: "claude-3-5-haiku-20241022",
         max_tokens: 1,
         stream: true,
         messages: [{ role: "user", content: "." }],

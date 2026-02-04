@@ -19,7 +19,7 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 const SUPPORTED_MODELS = [
   "anthropic/claude-opus-4-5-20251101",
   "anthropic/claude-sonnet-4-5-20241022",
-  "anthropic/claude-haiku-35-20241022",
+  "anthropic/claude-3-5-haiku-20241022",
   "google/gemini-2.5-pro",
   "openai/gpt-4o",
 ];
@@ -156,7 +156,7 @@ export class OpenRouterProvider implements LLMProvider {
           "X-Title": this.title,
         },
         body: JSON.stringify({
-          model: "anthropic/claude-haiku-35-20241022",
+          model: "anthropic/claude-3-5-haiku-20241022",
           max_tokens: 1,
           stream: true,
           messages: [{ role: "user", content: "." }],

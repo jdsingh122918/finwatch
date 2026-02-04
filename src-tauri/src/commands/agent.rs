@@ -47,7 +47,7 @@ pub async fn agent_start(
     let model = app_config
         .get("model")
         .and_then(|m| m.as_str())
-        .unwrap_or("claude-haiku-35-20241022");
+        .unwrap_or("claude-3-5-haiku-20241022");
 
     let agent_params = serde_json::json!({
         "alpaca": {

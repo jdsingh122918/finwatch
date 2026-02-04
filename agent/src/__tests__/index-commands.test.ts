@@ -14,7 +14,7 @@ describe("agent JSON-RPC commands", () => {
         llm: {
           anthropicApiKey: "sk-ant-test",
           openrouterApiKey: "sk-or-test",
-          model: "claude-haiku-35-20241022",
+          model: "claude-3-5-haiku-20241022",
           maxTokens: 4096,
           temperature: 0.3,
         },
