@@ -18,6 +18,11 @@ export default defineConfig({
         },
       },
       {
+        resolve: {
+          alias: {
+            "@finwatch/shared": new URL("./shared/src/index.ts", import.meta.url).pathname,
+          },
+        },
         test: {
           name: "frontend",
           root: "./src",

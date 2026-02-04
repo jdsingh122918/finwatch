@@ -25,6 +25,7 @@ export function createBacktestSlice() {
     progress: null,
     comparisonIds: [],
 
+    // Known limitation: setActiveRunId does not validate that the ID exists in runs[]
     setActiveRunId: (id) => set({ activeRunId: id }),
 
     setProgress: (progress) => set({ progress }),

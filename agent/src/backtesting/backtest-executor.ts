@@ -89,7 +89,7 @@ export class BacktestExecutor {
     let realizedPnl = 0;
     let remaining = sellQty;
 
-    // FIFO lot matching
+    // FIFO (First-In-First-Out) lot matching: sells consume the oldest purchased lots first
     while (remaining > 0 && pos.lots.length > 0) {
       const lot = pos.lots[0];
       const fromLot = Math.min(remaining, lot.qty);
@@ -129,6 +129,7 @@ export class BacktestExecutor {
   portfolioValue(currentPrices: Record<string, number>): number {
     let posValue = 0;
     for (const [symbol, pos] of this.positions) {
+      // Falls back to avgEntry when current market price is unavailable for this symbol
       const price = currentPrices[symbol] ?? pos.avgEntry;
       posValue += pos.qty * price;
     }

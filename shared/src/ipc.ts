@@ -34,7 +34,6 @@ export type IpcCommands = {
   "backtest:list": () => BacktestResult[];
   "backtest:get": (backtestId: string) => BacktestResult;
   "backtest:delete": (backtestId: string) => void;
-  "backtest:export": (backtestId: string, format: "json" | "csv") => string;
 };
 
 // Events: Node.js -> Rust -> React (push, fire-and-forget)

@@ -49,12 +49,12 @@ function computeBaseMetrics(
   // Profit factor
   const grossProfit = wins.reduce((s, t) => s + (t.realizedPnl ?? 0), 0);
   const grossLoss = Math.abs(losses.reduce((s, t) => s + (t.realizedPnl ?? 0), 0));
-  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0;
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? 9999.99 : 0;
 
   // Avg win/loss ratio
   const avgWin = wins.length > 0 ? grossProfit / wins.length : 0;
   const avgLoss = losses.length > 0 ? grossLoss / losses.length : 0;
-  const avgWinLossRatio = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? Infinity : 0;
+  const avgWinLossRatio = avgLoss > 0 ? avgWin / avgLoss : avgWin > 0 ? 9999.99 : 0;
 
   // Largest win/loss
   const pnls = sellTrades.map((t) => t.realizedPnl ?? 0);
@@ -77,6 +77,7 @@ function computeBaseMetrics(
 
   // Drawdown from equity curve
   let maxDDPct = 0;
+  // maxDrawdownDuration measured in equity curve data points (trading days)
   let maxDDDuration = 0;
   if (curve.length > 1) {
     let peak = curve[0].value;
@@ -108,12 +109,15 @@ function computeBaseMetrics(
   let sortinoRatio = 0;
   if (dailyReturns.length > 1) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+    // Population variance (N divisor, not N-1)
     const variance = dailyReturns.reduce((s, r) => s + (r - mean) ** 2, 0) / dailyReturns.length;
     const stdDev = Math.sqrt(variance);
     if (stdDev > 0) {
+      // Annualize: 252 trading days/year, multiply daily ratio by sqrt(252)
       sharpeRatio = (mean / stdDev) * Math.sqrt(252);
     }
 
+    // Downside deviation uses MAR=0; only negative daily returns contribute
     const downside = dailyReturns.filter((r) => r < 0);
     if (downside.length > 0) {
       const downsideVariance = downside.reduce((s, r) => s + r ** 2, 0) / downside.length;
@@ -124,7 +128,7 @@ function computeBaseMetrics(
     }
   }
 
-  // Avg trade duration (hours between buy and sell for same symbol — approximate)
+  // Avg trade duration (hours) using FIFO timestamp matching: each sell is matched to the oldest buy for that symbol. Limitation: does not account for partial fills or position sizing.
   let totalDuration = 0;
   let durationCount = 0;
   const openTimestamps = new Map<string, number[]>();
@@ -198,6 +202,7 @@ export function calculateMetrics(
   const perSymbol: Record<string, Omit<BacktestMetrics, "perSymbol">> = {};
 
   for (const symbol of symbols) {
+    // Per-symbol: empty equity curve -> Sharpe/Sortino/drawdown will be 0. Only trade-based metrics are meaningful.
     const symbolTrades = trades.filter((t) => t.symbol === symbol);
     perSymbol[symbol] = computeBaseMetrics(symbolTrades, [], initialCapital);
     // Compute totalReturn from trade PnLs for per-symbol

@@ -53,6 +53,7 @@ function severityRank(severity: string): number {
 // ---------------------------------------------------------------------------
 
 /** Group ticks by date string (YYYY-MM-DD) sorted chronologically. */
+// Note: uses UTC date via toISOString() -- timestamps must be in UTC
 function groupByDate(ticks: DataTick[]): Map<string, DataTick[]> {
   const sorted = [...ticks].sort((a, b) => a.timestamp - b.timestamp);
   const groups = new Map<string, DataTick[]>();
@@ -88,12 +89,9 @@ export class BacktestEngine {
 
   onProgress?: (progress: BacktestProgress) => void;
 
-  constructor(config: BacktestConfig, deps?: BacktestDeps) {
+  constructor(config: BacktestConfig, deps: BacktestDeps) {
     this.config = config;
-    this.deps = deps ?? {
-      fetchData: async () => [],
-      runAnalysis: async () => [],
-    };
+    this.deps = deps;
   }
 
   cancel(): void {
@@ -166,7 +164,7 @@ export class BacktestEngine {
 
       for (const [date, dateTicks] of dateGroups) {
         if (this.cancelled) {
-          return this.finishCancelled(result);
+          return this.finishCancelled(result, executor);
         }
 
         // Reset daily trade count on new date
@@ -179,10 +177,10 @@ export class BacktestEngine {
         const anomalies = await this.deps.runAnalysis(dateTicks);
 
         if (this.cancelled) {
-          return this.finishCancelled(result);
+          return this.finishCancelled(result, executor);
         }
 
-        // Filter anomalies by severity threshold and confidence
+        // Filter anomalies by severity threshold and preScreenScore
         const thresholdRank = severityRank(this.config.severityThreshold);
         const qualifying = anomalies.filter(
           (a) =>
@@ -198,7 +196,7 @@ export class BacktestEngine {
         // Generate and execute trades for qualifying anomalies
         for (const anomaly of qualifying) {
           if (this.cancelled) {
-            return this.finishCancelled(result);
+            return this.finishCancelled(result, executor);
           }
 
           const action = tradeGenerator.evaluate(anomaly);
@@ -206,7 +204,11 @@ export class BacktestEngine {
 
           // Run risk check
           const symbol = action.symbol;
-          const currentPrice = prices[symbol] ?? anomaly.metrics.close ?? 0;
+          const currentPrice = prices[symbol] ?? anomaly.metrics.close;
+          if (currentPrice === undefined || currentPrice <= 0) {
+            this.log.warn("Skipping trade: no valid price", { symbol });
+            continue;
+          }
           const portfolioValue = executor.portfolioValue(prices);
 
           const riskCheck = riskManager.check(action, {
@@ -277,7 +279,8 @@ export class BacktestEngine {
       return result;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      this.log.error("Backtest failed", { error: message });
+      const stack = err instanceof Error ? err.stack : undefined;
+      this.log.error("Backtest failed", { error: message, stack: stack ?? "no stack" });
 
       result.status = "failed";
       result.error = message;
@@ -286,14 +289,24 @@ export class BacktestEngine {
     }
   }
 
-  private finishCancelled(result: BacktestResult): BacktestResult {
+  private finishCancelled(result: BacktestResult, executor?: BacktestExecutor): BacktestResult {
     this.log.info("Backtest cancelled");
     result.status = "cancelled";
     result.completedAt = Date.now();
+    if (executor) {
+      result.trades = executor.getTradeLog();
+      result.equityCurve = executor.getEquityCurve();
+    }
     return result;
   }
 
   private emitProgress(progress: BacktestProgress): void {
-    this.onProgress?.(progress);
+    try {
+      this.onProgress?.(progress);
+    } catch (err) {
+      this.log.warn("Progress callback error", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }

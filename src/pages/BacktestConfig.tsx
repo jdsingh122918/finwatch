@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTauriEvent } from "../hooks/use-tauri-event";
+import { BacktestConfigSchema } from "@finwatch/shared";
 import type { BacktestConfig, BacktestProgress } from "@finwatch/shared";
 
 type Props = {
@@ -28,6 +29,7 @@ export function BacktestConfigPage({ progress, onProgress, onComplete, runs, onV
   const [modelId, setModelId] = useState("claude-3-5-haiku-20241022");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const currentIdRef = useRef<string | null>(null);
 
   useTauriEvent<BacktestProgress>("backtest:progress", onProgress);
   useTauriEvent<{ backtestId: string }>("backtest:complete", (payload) => {
@@ -59,7 +61,14 @@ export function BacktestConfigPage({ progress, onProgress, onComplete, runs, onV
       modelId,
     };
 
+    const parseResult = BacktestConfigSchema.safeParse(config);
+    if (!parseResult.success) {
+      setError(parseResult.error.issues.map((i: { path: (string | number)[]; message: string }) => `${i.path.join(".")}: ${i.message}`).join("; "));
+      return;
+    }
+
     try {
+      currentIdRef.current = id;
       setRunning(true);
       await invoke("backtest_start", { config: JSON.stringify(config) });
     } catch (err) {
@@ -108,7 +117,7 @@ export function BacktestConfigPage({ progress, onProgress, onComplete, runs, onV
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-text-muted text-xs">Initial Capital ($)</span>
-            <input type="number" value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} disabled={running}
+            <input type="number" value={initialCapital} onChange={(e) => { const parsed = parseFloat(e.target.value); if (!isNaN(parsed)) setInitialCapital(parsed); }} disabled={running}
               className="mt-1 w-full bg-bg-elevated border border-border rounded px-3 py-2 text-text-primary font-mono text-sm focus:border-accent focus:outline-none" />
           </label>
           <label className="block">
@@ -129,22 +138,22 @@ export function BacktestConfigPage({ progress, onProgress, onComplete, runs, onV
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-text-muted text-xs">Max Position Size ($)</span>
-            <input type="number" value={maxPositionSize} onChange={(e) => setMaxPositionSize(Number(e.target.value))} disabled={running}
+            <input type="number" value={maxPositionSize} onChange={(e) => { const parsed = parseFloat(e.target.value); if (!isNaN(parsed)) setMaxPositionSize(parsed); }} disabled={running}
               className="mt-1 w-full bg-bg-elevated border border-border rounded px-3 py-2 text-text-primary font-mono text-sm focus:border-accent focus:outline-none" />
           </label>
           <label className="block">
             <span className="text-text-muted text-xs">Max Exposure ($)</span>
-            <input type="number" value={maxExposure} onChange={(e) => setMaxExposure(Number(e.target.value))} disabled={running}
+            <input type="number" value={maxExposure} onChange={(e) => { const parsed = parseFloat(e.target.value); if (!isNaN(parsed)) setMaxExposure(parsed); }} disabled={running}
               className="mt-1 w-full bg-bg-elevated border border-border rounded px-3 py-2 text-text-primary font-mono text-sm focus:border-accent focus:outline-none" />
           </label>
           <label className="block">
             <span className="text-text-muted text-xs">Max Daily Trades</span>
-            <input type="number" value={maxDailyTrades} onChange={(e) => setMaxDailyTrades(Number(e.target.value))} disabled={running}
+            <input type="number" value={maxDailyTrades} onChange={(e) => { const parsed = parseFloat(e.target.value); if (!isNaN(parsed)) setMaxDailyTrades(parsed); }} disabled={running}
               className="mt-1 w-full bg-bg-elevated border border-border rounded px-3 py-2 text-text-primary font-mono text-sm focus:border-accent focus:outline-none" />
           </label>
           <label className="block">
             <span className="text-text-muted text-xs">Max Loss (%)</span>
-            <input type="number" value={maxLossPct} onChange={(e) => setMaxLossPct(Number(e.target.value))} disabled={running}
+            <input type="number" value={maxLossPct} onChange={(e) => { const parsed = parseFloat(e.target.value); if (!isNaN(parsed)) setMaxLossPct(parsed); }} disabled={running}
               className="mt-1 w-full bg-bg-elevated border border-border rounded px-3 py-2 text-text-primary font-mono text-sm focus:border-accent focus:outline-none" />
           </label>
         </div>
@@ -189,7 +198,11 @@ export function BacktestConfigPage({ progress, onProgress, onComplete, runs, onV
           {running ? "Running..." : "Start Backtest"}
         </button>
         {running && (
-          <button onClick={() => setRunning(false)}
+          <button onClick={async () => {
+              try { if (currentIdRef.current) await invoke("backtest_cancel", { backtestId: currentIdRef.current }); }
+              catch { /* best-effort */ }
+              setRunning(false);
+            }}
             className="px-4 py-2 border border-severity-high text-severity-high rounded text-sm hover:bg-severity-high/10 cursor-pointer">
             Cancel
           </button>

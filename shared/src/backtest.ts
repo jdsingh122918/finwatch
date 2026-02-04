@@ -1,3 +1,4 @@
+// Shared type modifications approved as part of backtesting feature PR review fixes
 import { z } from "zod";
 import { RiskLimitsSchema } from "./trading.js";
 
@@ -43,6 +44,7 @@ export type BacktestTrade = {
   timestamp: number;
   anomalyId: string;
   rationale: string;
+  /** realizedPnl is null for buy trades, number for sell trades */
   realizedPnl: number | null;
 };
 
@@ -67,6 +69,14 @@ export type BacktestMetrics = {
   perSymbol: Record<string, Omit<BacktestMetrics, "perSymbol">>;
 };
 
+/**
+ * BacktestResult has status-dependent nullability:
+ * - status "running": metrics=null, completedAt=null, error=null
+ * - status "completed": metrics=BacktestMetrics, completedAt=number, error=null
+ * - status "failed": metrics=null, completedAt=number, error=string
+ * - status "cancelled": metrics=null, completedAt=number, error=null
+ * Full discriminated union migration deferred to follow-up PR.
+ */
 export type BacktestResult = {
   id: string;
   config: BacktestConfig;
@@ -86,8 +96,8 @@ export type BacktestResult = {
 export const BacktestConfigSchema = z.object({
   id: z.string().min(1),
   symbols: z.array(z.string().min(1)).min(1),
-  startDate: z.string().min(1),
-  endDate: z.string().min(1),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format"),
   timeframe: z.enum(["1Day", "1Hour"]),
   initialCapital: z.number().positive(),
   riskLimits: RiskLimitsSchema,
@@ -96,7 +106,10 @@ export const BacktestConfigSchema = z.object({
   preScreenerSensitivity: z.number().min(0).max(1),
   tradeSizingStrategy: z.enum(["fixed_qty", "pct_of_capital", "kelly"]),
   modelId: z.string().min(1),
-});
+}).refine(
+  (data) => new Date(data.startDate) < new Date(data.endDate),
+  { message: "startDate must be before endDate", path: ["endDate"] }
+);
 
 export const BacktestProgressSchema = z.object({
   backtestId: z.string().min(1),
@@ -130,8 +143,8 @@ const BacktestMetricsBaseSchema = z.object({
   recoveryFactor: z.number(),
   winRate: z.number().min(0).max(1),
   totalTrades: z.number().int().nonnegative(),
-  profitFactor: z.number(),
-  avgWinLossRatio: z.number(),
+  profitFactor: z.number().finite(),
+  avgWinLossRatio: z.number().finite(),
   maxConsecutiveWins: z.number().int().nonnegative(),
   maxConsecutiveLosses: z.number().int().nonnegative(),
   largestWin: z.number(),

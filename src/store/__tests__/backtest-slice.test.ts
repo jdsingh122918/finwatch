@@ -77,6 +77,38 @@ describe("backtest-slice", () => {
     expect(slice.getState().comparisonIds).toEqual(["bt-001", "bt-002"]);
   });
 
+  it("addRun replaces existing run with same id", () => {
+    slice.getState().addRun(mockResult);
+    expect(slice.getState().runs).toHaveLength(1);
+
+    const updatedResult: BacktestResult = {
+      ...mockResult,
+      status: "failed",
+      error: "timeout",
+    };
+    slice.getState().addRun(updatedResult);
+
+    expect(slice.getState().runs).toHaveLength(1);
+    expect(slice.getState().runs[0].id).toBe("bt-001");
+    expect(slice.getState().runs[0].status).toBe("failed");
+    expect(slice.getState().runs[0].error).toBe("timeout");
+  });
+
+  it("addRun prepends new runs to front", () => {
+    slice.getState().addRun(mockResult);
+
+    const secondResult: BacktestResult = {
+      ...mockResult,
+      id: "bt-002",
+      config: { ...mockResult.config, id: "bt-002" },
+    };
+    slice.getState().addRun(secondResult);
+
+    expect(slice.getState().runs).toHaveLength(2);
+    expect(slice.getState().runs[0].id).toBe("bt-002");
+    expect(slice.getState().runs[1].id).toBe("bt-001");
+  });
+
   it("clears progress when run completes", () => {
     slice.getState().setProgress({
       backtestId: "bt-001",

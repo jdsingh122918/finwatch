@@ -3,7 +3,6 @@ import type { BacktestResult, BacktestTrade, BacktestMetrics } from "@finwatch/s
 
 type Props = {
   result: BacktestResult;
-  comparisonResults?: BacktestResult[];
   onBack: () => void;
 };
 
@@ -15,7 +14,13 @@ function fmt(n: number, decimals = 2): string {
   return n.toFixed(decimals);
 }
 
+/** Format a value already in percentage form (e.g., 5.0 -> "+5.00%") */
 function fmtPct(n: number): string {
+  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+}
+
+/** Format a 0-1 ratio as percentage (e.g., 0.65 -> "+65.00%") */
+function fmtRatio(n: number): string {
   return `${n >= 0 ? "+" : ""}${(n * 100).toFixed(2)}%`;
 }
 
@@ -90,8 +95,8 @@ function EquityCurve({
   trades: BacktestTrade[];
   initialCapital: number;
 }) {
-  if (curve.length === 0) {
-    return <p className="text-text-muted text-xs">No equity data.</p>;
+  if (curve.length < 2) {
+    return <p className="text-text-muted text-xs">Not enough data for chart.</p>;
   }
 
   const W = 800;
@@ -431,7 +436,7 @@ function PerSymbolBreakdown({
                 <Stat label="Sharpe" value={fmt(m.sharpeRatio)} />
                 <Stat label="Sortino" value={fmt(m.sortinoRatio)} />
                 <Stat label="Max DD" value={fmtPct(-m.maxDrawdownPct)} />
-                <Stat label="Win Rate" value={fmtPct(m.winRate)} />
+                <Stat label="Win Rate" value={fmtRatio(m.winRate)} />
                 <Stat label="Profit Factor" value={fmt(m.profitFactor)} />
                 <Stat label="Avg W/L" value={fmt(m.avgWinLossRatio)} />
                 <Stat label="Largest Win" value={fmtCurrency(m.largestWin)} />
@@ -579,7 +584,7 @@ export function BacktestResults({ result, onBack }: Props) {
       },
       {
         label: "Win Rate",
-        value: fmtPct(metrics.winRate),
+        value: fmtRatio(metrics.winRate),
         cls:
           metrics.winRate >= 0.5
             ? "text-severity-low"

@@ -8,78 +8,72 @@ import {
 } from "../backtest.js";
 
 describe("BacktestConfig schema", () => {
+  const validConfig = {
+    id: "bt-001",
+    symbols: ["AAPL", "TSLA"],
+    startDate: "2024-01-01",
+    endDate: "2024-12-31",
+    timeframe: "1Day" as const,
+    initialCapital: 100000,
+    riskLimits: {
+      maxPositionSize: 10000,
+      maxExposure: 50000,
+      maxDailyTrades: 5,
+      maxLossPct: 2,
+      cooldownMs: 60000,
+    },
+    severityThreshold: "high" as const,
+    confidenceThreshold: 0.7,
+    preScreenerSensitivity: 0.5,
+    tradeSizingStrategy: "pct_of_capital" as const,
+    modelId: "claude-3-5-haiku-20241022",
+  };
+
   it("validates a valid config", () => {
-    const config = {
-      id: "bt-001",
-      symbols: ["AAPL", "TSLA"],
-      startDate: "2024-01-01",
-      endDate: "2024-12-31",
-      timeframe: "1Day",
-      initialCapital: 100000,
-      riskLimits: {
-        maxPositionSize: 10000,
-        maxExposure: 50000,
-        maxDailyTrades: 5,
-        maxLossPct: 2,
-        cooldownMs: 60000,
-      },
-      severityThreshold: "high",
-      confidenceThreshold: 0.7,
-      preScreenerSensitivity: 0.5,
-      tradeSizingStrategy: "pct_of_capital",
-      modelId: "claude-3-5-haiku-20241022",
-    };
-    const result = BacktestConfigSchema.safeParse(config);
+    const result = BacktestConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
   });
 
   it("rejects invalid timeframe", () => {
-    const config = {
-      id: "bt-001",
-      symbols: ["AAPL"],
-      startDate: "2024-01-01",
-      endDate: "2024-12-31",
+    const result = BacktestConfigSchema.safeParse({
+      ...validConfig,
       timeframe: "5Min",
-      initialCapital: 100000,
-      riskLimits: {
-        maxPositionSize: 10000,
-        maxExposure: 50000,
-        maxDailyTrades: 5,
-        maxLossPct: 2,
-        cooldownMs: 60000,
-      },
-      severityThreshold: "high",
-      confidenceThreshold: 0.7,
-      preScreenerSensitivity: 0.5,
-      tradeSizingStrategy: "pct_of_capital",
-      modelId: "test-model",
-    };
-    const result = BacktestConfigSchema.safeParse(config);
+    });
     expect(result.success).toBe(false);
   });
 
   it("rejects empty symbols array", () => {
-    const config = {
-      id: "bt-001",
+    const result = BacktestConfigSchema.safeParse({
+      ...validConfig,
       symbols: [],
-      startDate: "2024-01-01",
-      endDate: "2024-12-31",
-      timeframe: "1Day",
-      initialCapital: 100000,
-      riskLimits: {
-        maxPositionSize: 10000,
-        maxExposure: 50000,
-        maxDailyTrades: 5,
-        maxLossPct: 2,
-        cooldownMs: 60000,
-      },
-      severityThreshold: "high",
-      confidenceThreshold: 0.7,
-      preScreenerSensitivity: 0.5,
-      tradeSizingStrategy: "pct_of_capital",
-      modelId: "test-model",
-    };
-    const result = BacktestConfigSchema.safeParse(config);
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects initialCapital of zero", () => {
+    const result = BacktestConfigSchema.safeParse({ ...validConfig, initialCapital: 0 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative initialCapital", () => {
+    const result = BacktestConfigSchema.safeParse({ ...validConfig, initialCapital: -1000 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects startDate after endDate", () => {
+    const result = BacktestConfigSchema.safeParse({
+      ...validConfig,
+      startDate: "2024-12-31",
+      endDate: "2024-01-01",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid date format", () => {
+    const result = BacktestConfigSchema.safeParse({
+      ...validConfig,
+      startDate: "Jan 1, 2024",
+    });
     expect(result.success).toBe(false);
   });
 });
@@ -136,29 +130,46 @@ describe("BacktestTrade schema", () => {
 });
 
 describe("BacktestMetrics schema", () => {
+  const validMetrics = {
+    totalReturn: 5000,
+    totalReturnPct: 5.0,
+    sharpeRatio: 1.5,
+    sortinoRatio: 2.0,
+    maxDrawdownPct: 8.5,
+    maxDrawdownDuration: 15,
+    recoveryFactor: 0.59,
+    winRate: 0.65,
+    totalTrades: 20,
+    profitFactor: 1.8,
+    avgWinLossRatio: 1.5,
+    maxConsecutiveWins: 5,
+    maxConsecutiveLosses: 3,
+    largestWin: 2000,
+    largestLoss: -1000,
+    avgTradeDuration: 48,
+    monthlyReturns: [{ month: "2024-01", return: 2.5 }],
+    perSymbol: {},
+  };
+
   it("validates full metrics object", () => {
-    const metrics = {
-      totalReturn: 5000,
-      totalReturnPct: 5.0,
-      sharpeRatio: 1.5,
-      sortinoRatio: 2.0,
-      maxDrawdownPct: 8.5,
-      maxDrawdownDuration: 15,
-      recoveryFactor: 0.59,
-      winRate: 0.65,
-      totalTrades: 20,
-      profitFactor: 1.8,
-      avgWinLossRatio: 1.5,
-      maxConsecutiveWins: 5,
-      maxConsecutiveLosses: 3,
-      largestWin: 2000,
-      largestLoss: -1000,
-      avgTradeDuration: 48,
-      monthlyReturns: [{ month: "2024-01", return: 2.5 }],
-      perSymbol: {},
-    };
-    const result = BacktestMetricsSchema.safeParse(metrics);
+    const result = BacktestMetricsSchema.safeParse(validMetrics);
     expect(result.success).toBe(true);
+  });
+
+  it("rejects Infinity in profitFactor", () => {
+    const result = BacktestMetricsSchema.safeParse({
+      ...validMetrics,
+      profitFactor: Infinity,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects Infinity in avgWinLossRatio", () => {
+    const result = BacktestMetricsSchema.safeParse({
+      ...validMetrics,
+      avgWinLossRatio: Infinity,
+    });
+    expect(result.success).toBe(false);
   });
 });
 

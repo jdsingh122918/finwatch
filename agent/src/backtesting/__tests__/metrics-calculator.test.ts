@@ -113,7 +113,11 @@ describe("calculateMetrics", () => {
       { date: "2024-02-28", value: 101000 },
     ];
     const metrics = calculateMetrics([], curve, 100000);
-    expect(metrics.monthlyReturns.length).toBeGreaterThanOrEqual(1);
+    expect(metrics.monthlyReturns.length).toBe(2);
+    // Jan: 100000 -> 102000 = 2%
+    expect(metrics.monthlyReturns[0].return).toBeCloseTo(2.0, 1);
+    // Feb: 102000 -> 101000 = -0.98%
+    expect(metrics.monthlyReturns[1].return).toBeCloseTo(-0.98, 1);
   });
 
   it("calculates sharpe ratio from daily returns", () => {
@@ -126,7 +130,61 @@ describe("calculateMetrics", () => {
       { date: "2024-01-05", value: 101500 }, // -0.49%
     ];
     const metrics = calculateMetrics([], curve, 100000);
-    // Should be a positive number since net positive
-    expect(metrics.sharpeRatio).toBeGreaterThan(0);
+    // Daily returns: [0.01, -0.004950495, 0.014925373, -0.004901961]
+    // mean = 0.003768, stddev = 0.009388, sharpe = (mean/std)*sqrt(252) ~ 6.37
+    expect(metrics.sharpeRatio).toBeCloseTo(6.37, 0);
+  });
+
+  it("caps profitFactor to 9999.99 when all trades are winners", () => {
+    const trades = [
+      makeTrade({ id: "t1", realizedPnl: 500 }),
+      makeTrade({ id: "t2", realizedPnl: 300 }),
+      makeTrade({ id: "t3", realizedPnl: 200 }),
+    ];
+    const metrics = calculateMetrics(trades, [], 100000);
+    expect(metrics.profitFactor).toBe(9999.99);
+  });
+
+  it("caps avgWinLossRatio to 9999.99 when no losses", () => {
+    const trades = [
+      makeTrade({ id: "t1", realizedPnl: 500 }),
+      makeTrade({ id: "t2", realizedPnl: 300 }),
+    ];
+    const metrics = calculateMetrics(trades, [], 100000);
+    expect(metrics.avgWinLossRatio).toBe(9999.99);
+  });
+
+  it("calculates sortino ratio with negative returns", () => {
+    // Curve with both positive and negative returns
+    const curve = [
+      { date: "2024-01-01", value: 100000 },
+      { date: "2024-01-02", value: 102000 },  // +2%
+      { date: "2024-01-03", value: 99000 },   // -2.94%
+      { date: "2024-01-04", value: 101000 },  // +2.02%
+      { date: "2024-01-05", value: 98000 },   // -2.97%
+      { date: "2024-01-06", value: 100000 },  // +2.04%
+    ];
+    const metrics = calculateMetrics([], curve, 100000);
+    // Daily returns: [0.02, -0.02941, 0.02020, -0.02970, 0.02041]
+    // mean = 0.000300, downside returns: [-0.02941, -0.02970]
+    // downsideVariance = (0.02941^2 + 0.02970^2) / 2 = 0.000876
+    // downsideStd = 0.02960
+    // sortino = (0.000300 / 0.02960) * sqrt(252) ~ 0.161
+    expect(metrics.sortinoRatio).toBeCloseTo(0.161, 0);
+  });
+
+  it("calculates monthly returns with specific values", () => {
+    const curve = [
+      { date: "2024-01-01", value: 100000 },
+      { date: "2024-01-31", value: 102000 },
+      { date: "2024-02-01", value: 102000 },
+      { date: "2024-02-28", value: 101000 },
+    ];
+    const metrics = calculateMetrics([], curve, 100000);
+    expect(metrics.monthlyReturns.length).toBe(2);
+    // Jan: 100000 -> 102000 = 2%
+    expect(metrics.monthlyReturns[0].return).toBeCloseTo(2.0, 1);
+    // Feb: 102000 -> 101000 = -0.98%
+    expect(metrics.monthlyReturns[1].return).toBeCloseTo(-0.98, 1);
   });
 });

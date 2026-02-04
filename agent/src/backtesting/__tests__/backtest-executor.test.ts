@@ -123,4 +123,32 @@ describe("BacktestExecutor", () => {
     expect(curve[0].value).toBe(100000);
     expect(curve[1].value).toBe(99000 + 1100);
   });
+
+  it("clamps sell qty to held position", () => {
+    // Buy 5 shares of AAPL
+    executor.execute(
+      { symbol: "AAPL", side: "buy", qty: 5, type: "market", rationale: "Buy 5", confidence: 0.8, anomalyId: "a-1" },
+      100,
+      1000,
+    );
+
+    // Try to sell 10 shares (more than held)
+    const trade = executor.execute(
+      { symbol: "AAPL", side: "sell", qty: 10, type: "market", rationale: "Sell 10", confidence: 0.8, anomalyId: "a-2" },
+      120,
+      2000,
+    );
+
+    expect(trade).not.toBeNull();
+    // Should only sell 5 (clamped to position size)
+    expect(trade!.qty).toBe(5);
+    // Realized PnL based on 5 shares: 5 * (120 - 100) = 100
+    expect(trade!.realizedPnl).toBe(100);
+    // Position should be fully closed
+    const pos = executor.getPositions();
+    expect(pos["AAPL"]).toBeUndefined();
+    // Cash should reflect selling 5 shares at 120
+    // Started: 100000, bought 5@100 = -500, sold 5@120 = +600 => 100000 - 500 + 600 = 100100
+    expect(executor.cash).toBe(100100);
+  });
 });
