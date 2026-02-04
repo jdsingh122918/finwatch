@@ -13,7 +13,7 @@ describe("SymbolChips", () => {
     const handler = vi.fn();
     render(<SymbolChips symbols={["AAPL", "TSLA"]} onRemove={handler} />);
     const removeButtons = screen.getAllByRole("button");
-    fireEvent.click(removeButtons[0]);
+    fireEvent.click(removeButtons[0]!);
     expect(handler).toHaveBeenCalledWith("AAPL");
   });
 

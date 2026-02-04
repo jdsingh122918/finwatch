@@ -56,7 +56,7 @@ describe("watchlistSlice", () => {
     ];
     slice.getState().setAssets(assets);
     expect(slice.getState().assets).toHaveLength(1);
-    expect(slice.getState().assets[0].symbol).toBe("AAPL");
+    expect(slice.getState().assets[0]!.symbol).toBe("AAPL");
   });
 
   it("syncs watchlist from config", () => {

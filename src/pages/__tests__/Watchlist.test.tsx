@@ -58,7 +58,7 @@ describe("Watchlist", () => {
     const handler = vi.fn();
     render(<Watchlist {...defaultProps} watchlist={[]} onAddSymbol={handler} />);
     const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]); // AAPL
+    fireEvent.click(checkboxes[0]!); // AAPL
     expect(handler).toHaveBeenCalledWith("AAPL");
   });
 
@@ -119,6 +119,6 @@ describe("Watchlist", () => {
     render(<Watchlist {...defaultProps} watchlist={["TSLA"]} />);
     const rows = screen.getAllByRole("row");
     // First data row (index 1, after header) should be the watched one
-    expect(rows[1].textContent).toContain("TSLA");
+    expect(rows[1]!.textContent).toContain("TSLA");
   });
 });
