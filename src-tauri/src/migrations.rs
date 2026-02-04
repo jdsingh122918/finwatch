@@ -56,6 +56,19 @@ pub fn all_migrations() -> Vec<Migration> {
                   CREATE INDEX IF NOT EXISTS idx_backtests_status ON backtests(status);
                   CREATE INDEX IF NOT EXISTS idx_backtests_created ON backtests(created_at);",
         },
+        Migration {
+            name: "004_assets_cache",
+            sql: "CREATE TABLE IF NOT EXISTS assets (
+                      symbol TEXT PRIMARY KEY,
+                      name TEXT NOT NULL DEFAULT '',
+                      exchange TEXT NOT NULL DEFAULT '',
+                      asset_class TEXT NOT NULL DEFAULT 'us_equity',
+                      status TEXT NOT NULL DEFAULT 'active',
+                      fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+                  );
+                  CREATE INDEX IF NOT EXISTS idx_assets_class ON assets(asset_class);
+                  CREATE INDEX IF NOT EXISTS idx_assets_exchange ON assets(exchange);",
+        },
     ]
 }
 
@@ -129,5 +142,15 @@ mod tests {
         let names = applied(&pool).unwrap();
         assert!(!names.is_empty());
         assert_eq!(names[0], all_migrations()[0].name);
+    }
+
+    #[test]
+    fn migration_004_creates_assets_table() {
+        let pool = test_pool();
+        run_pending(&pool).unwrap();
+        let conn = pool.get().unwrap();
+        // Verify table exists by querying it
+        conn.execute_batch("SELECT symbol, name, exchange, asset_class, status, fetched_at FROM assets LIMIT 0")
+            .expect("assets table should exist with expected columns");
     }
 }
