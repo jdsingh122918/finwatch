@@ -23,6 +23,7 @@ pub fn run() {
         .manage(pool)
         .manage(bridge::SidecarBridge::new())
         .invoke_handler(tauri::generate_handler![
+            commands::assets::assets_fetch,
             commands::agent::agent_start,
             commands::agent::agent_stop,
             commands::agent::agent_status,
