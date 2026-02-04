@@ -8,6 +8,7 @@ import { AnomalyFeed } from "./pages/AnomalyFeed";
 import { AgentLog } from "./pages/AgentLog";
 import { SourceHealth } from "./pages/SourceHealth";
 import { Settings } from "./pages/Settings";
+import { Watchlist } from "./pages/Watchlist";
 import { BacktestConfigPage } from "./pages/BacktestConfig";
 import { BacktestResults } from "./pages/BacktestResults";
 import { createDataSlice } from "./store/data-slice";
@@ -15,9 +16,10 @@ import { createAnomalySlice } from "./store/anomaly-slice";
 import { createAgentSlice } from "./store/agent-slice";
 import { createTradingSlice } from "./store/trading-slice";
 import { createBacktestSlice } from "./store/backtest-slice";
+import { createWatchlistSlice } from "./store/watchlist-slice";
 import type { SourceHealth as SH } from "@finwatch/shared";
 
-const tabs = ["Dashboard", "Anomalies", "Agent", "Sources", "Backtest", "Settings"] as const;
+const tabs = ["Dashboard", "Watchlist", "Anomalies", "Agent", "Sources", "Backtest", "Settings"] as const;
 type Tab = (typeof tabs)[number];
 
 const dataStore = createDataSlice();
@@ -25,6 +27,7 @@ const anomalyStore = createAnomalySlice();
 const agentStore = createAgentSlice();
 const tradingStore = createTradingSlice();
 const backtestStore = createBacktestSlice();
+const watchlistStore = createWatchlistSlice();
 
 declare global {
   interface Window {
@@ -34,6 +37,7 @@ declare global {
       agent: typeof agentStore;
       trading: typeof tradingStore;
       backtest: typeof backtestStore;
+      watchlist: typeof watchlistStore;
       sources: {
         getState: () => { sources: Record<string, SH> };
         setState: (s: Record<string, SH>) => void;
@@ -65,6 +69,7 @@ window.__stores = {
   agent: agentStore,
   trading: tradingStore,
   backtest: backtestStore,
+  watchlist: watchlistStore,
   sources: sourcesStore,
 };
 
@@ -77,6 +82,19 @@ export default function App() {
   const sourceState = useSyncExternalStore(sourcesStore.subscribe, sourcesStore.getState);
   const tradingState = useSyncExternalStore(tradingStore.subscribe, tradingStore.getState);
   const backtestState = useSyncExternalStore(backtestStore.subscribe, backtestStore.getState);
+  const watchlistState = useSyncExternalStore(watchlistStore.subscribe, watchlistStore.getState);
+
+  const fetchAssets = () => {
+    watchlistStore.getState().setLoading(true);
+    invoke("assets_fetch")
+      .then((assets) => {
+        watchlistStore.getState().setAssets(assets as import("./store/watchlist-slice").Asset[]);
+        watchlistStore.getState().setLoading(false);
+      })
+      .catch((err) => {
+        watchlistStore.getState().setError(String(err));
+      });
+  };
 
   const eventStores = useMemo(() => ({
     addTick: (tick: import("@finwatch/shared").DataTick) => dataStore.getState().addTick(tick),
@@ -97,6 +115,27 @@ export default function App() {
 
       <main className="ml-12 pb-7 p-4 h-screen overflow-y-auto">
         {activeTab === "Dashboard" && <Dashboard ticks={dataState.ticks} />}
+        {activeTab === "Watchlist" && (
+          <Watchlist
+            assets={watchlistState.assets}
+            watchlist={watchlistState.watchlist}
+            pendingChanges={watchlistState.pendingChanges}
+            searchQuery={watchlistState.searchQuery}
+            categoryFilter={watchlistState.categoryFilter}
+            loading={watchlistState.loading}
+            error={watchlistState.error}
+            onAddSymbol={(s) => watchlistStore.getState().addSymbol(s)}
+            onRemoveSymbol={(s) => watchlistStore.getState().removeSymbol(s)}
+            onSearchChange={(q) => watchlistStore.getState().setSearchQuery(q)}
+            onCategoryChange={(f) => watchlistStore.getState().setCategoryFilter(f)}
+            onApplyChanges={() => {
+              const symbols = watchlistStore.getState().watchlist;
+              invoke("config_update", { patch: JSON.stringify({ symbols }) });
+              watchlistStore.getState().markApplied();
+            }}
+            onFetchAssets={fetchAssets}
+          />
+        )}
         {activeTab === "Anomalies" && (
           <AnomalyFeed
             anomalies={anomalyState.anomalies}
@@ -150,6 +189,15 @@ export default function App() {
             }}
             onAgentStop={() => {
               invoke("agent_stop");
+            }}
+            watchlist={watchlistState.watchlist}
+            pendingChanges={watchlistState.pendingChanges}
+            onRemoveSymbol={(s) => watchlistStore.getState().removeSymbol(s)}
+            onNavigateWatchlist={() => setActiveTab("Watchlist")}
+            onApplyChanges={() => {
+              const symbols = watchlistStore.getState().watchlist;
+              invoke("config_update", { patch: JSON.stringify({ symbols }) });
+              watchlistStore.getState().markApplied();
             }}
           />
         )}

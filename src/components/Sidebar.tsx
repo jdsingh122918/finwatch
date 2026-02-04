@@ -1,4 +1,4 @@
-type Tab = "Dashboard" | "Anomalies" | "Agent" | "Sources" | "Backtest" | "Settings";
+type Tab = "Dashboard" | "Watchlist" | "Anomalies" | "Agent" | "Sources" | "Backtest" | "Settings";
 
 type Props = {
   activeTab: Tab;
@@ -7,6 +7,7 @@ type Props = {
 
 const navItems: { tab: Tab; icon: string }[] = [
   { tab: "Dashboard", icon: "\u25EB" },
+  { tab: "Watchlist", icon: "\u2637" },
   { tab: "Anomalies", icon: "\u26A0" },
   { tab: "Agent", icon: "\u2B21" },
   { tab: "Sources", icon: "\u25C9" },

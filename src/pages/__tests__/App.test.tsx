@@ -6,9 +6,11 @@ describe("App shell", () => {
   it("renders sidebar navigation items", () => {
     render(<App />);
     expect(screen.getByTitle("Dashboard")).toBeTruthy();
+    expect(screen.getByTitle("Watchlist")).toBeTruthy();
     expect(screen.getByTitle("Anomalies")).toBeTruthy();
     expect(screen.getByTitle("Agent")).toBeTruthy();
     expect(screen.getByTitle("Sources")).toBeTruthy();
+    expect(screen.getByTitle("Backtest")).toBeTruthy();
     expect(screen.getByTitle("Settings")).toBeTruthy();
   });
 
@@ -22,5 +24,11 @@ describe("App shell", () => {
     render(<App />);
     expect(screen.getByText("IDLE")).toBeTruthy();
     expect(screen.getByText("PAPER")).toBeTruthy();
+  });
+
+  it("navigates to Watchlist page", () => {
+    render(<App />);
+    fireEvent.click(screen.getByTitle("Watchlist"));
+    expect(screen.getByText("Watchlist")).toBeTruthy();
   });
 });
