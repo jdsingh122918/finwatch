@@ -25,6 +25,37 @@ pub fn all_migrations() -> Vec<Migration> {
                       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                   );",
         },
+        Migration {
+            name: "003_backtest_tables",
+            sql: "CREATE TABLE IF NOT EXISTS backtests (
+                      id TEXT PRIMARY KEY,
+                      status TEXT NOT NULL DEFAULT 'running',
+                      config TEXT NOT NULL,
+                      metrics TEXT,
+                      created_at INTEGER NOT NULL,
+                      completed_at INTEGER,
+                      ticks_processed INTEGER NOT NULL DEFAULT 0,
+                      total_ticks INTEGER NOT NULL DEFAULT 0,
+                      error TEXT
+                  );
+
+                  CREATE TABLE IF NOT EXISTS backtest_trades (
+                      id TEXT PRIMARY KEY,
+                      backtest_id TEXT NOT NULL REFERENCES backtests(id) ON DELETE CASCADE,
+                      symbol TEXT NOT NULL,
+                      side TEXT NOT NULL,
+                      qty REAL NOT NULL,
+                      fill_price REAL NOT NULL,
+                      timestamp INTEGER NOT NULL,
+                      anomaly_id TEXT,
+                      rationale TEXT,
+                      realized_pnl REAL
+                  );
+
+                  CREATE INDEX IF NOT EXISTS idx_backtest_trades_backtest ON backtest_trades(backtest_id);
+                  CREATE INDEX IF NOT EXISTS idx_backtests_status ON backtests(status);
+                  CREATE INDEX IF NOT EXISTS idx_backtests_created ON backtests(created_at);",
+        },
     ]
 }
 

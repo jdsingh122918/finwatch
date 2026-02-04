@@ -35,6 +35,11 @@ pub fn run() {
             commands::credentials::credentials_set,
             commands::credentials::credentials_get,
             commands::credentials::credentials_exists,
+            commands::backtest::backtest_start,
+            commands::backtest::backtest_list,
+            commands::backtest::backtest_get,
+            commands::backtest::backtest_get_trades,
+            commands::backtest::backtest_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

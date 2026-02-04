@@ -4,6 +4,7 @@ pub mod anomalies;
 pub mod credentials;
 pub mod memory;
 pub mod sources;
+pub mod backtest;
 
 #[cfg(test)]
 mod tests {

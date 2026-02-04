@@ -4,6 +4,7 @@ pub mod memory;
 pub mod agent;
 pub mod provider;
 pub mod config;
+pub mod backtest;
 
 #[cfg(test)]
 mod tests {
