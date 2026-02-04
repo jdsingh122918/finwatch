@@ -1,7 +1,8 @@
-import { useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
+import { useAgentEvents } from "./hooks/use-agent-events";
 import { Dashboard } from "./pages/Dashboard";
 import { AnomalyFeed } from "./pages/AnomalyFeed";
 import { AgentLog } from "./pages/AgentLog";
@@ -69,6 +70,17 @@ export default function App() {
   const agentState = useSyncExternalStore(agentStore.subscribe, agentStore.getState);
   const sourceState = useSyncExternalStore(sourcesStore.subscribe, sourcesStore.getState);
   const tradingState = useSyncExternalStore(tradingStore.subscribe, tradingStore.getState);
+
+  const eventStores = useMemo(() => ({
+    addTick: (tick: import("@finwatch/shared").DataTick) => dataStore.getState().addTick(tick),
+    addAnomaly: (a: import("@finwatch/shared").Anomaly) => anomalyStore.getState().addAnomaly(a),
+    addActivity: (a: import("@finwatch/shared").AgentActivity) => agentStore.getState().addActivity(a),
+    setSources: (s: Record<string, SH>) => {
+      sourcesStore.setState({ ...sourceState.sources, ...s });
+    },
+  }), [sourceState.sources]);
+
+  useAgentEvents(eventStores);
 
   const uniqueSymbols = new Set(dataState.ticks.map((t) => t.symbol).filter(Boolean));
 
