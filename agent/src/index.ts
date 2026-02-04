@@ -38,15 +38,19 @@ export function createAgentServer(): JsonRpcServer {
       await orchestrator.stop();
     }
 
+    // Resolve API keys: params first, then env vars
+    const anthropicKey = p.llm.anthropicApiKey || process.env.ANTHROPIC_API_KEY || "";
+    const openrouterKey = p.llm.openrouterApiKey || process.env.OPENROUTER_API_KEY || "";
+
     const providers: LLMProvider[] = [];
-    if (p.llm.anthropicApiKey) {
-      providers.push(new AnthropicProvider({ apiKey: p.llm.anthropicApiKey }));
+    if (anthropicKey) {
+      providers.push(new AnthropicProvider({ apiKey: anthropicKey }));
     }
-    if (p.llm.openrouterApiKey) {
-      providers.push(new OpenRouterProvider({ apiKey: p.llm.openrouterApiKey }));
+    if (openrouterKey) {
+      providers.push(new OpenRouterProvider({ apiKey: openrouterKey }));
     }
     if (providers.length === 0) {
-      throw new Error("At least one LLM API key is required");
+      throw new Error("At least one LLM API key is required (params or ANTHROPIC_API_KEY/OPENROUTER_API_KEY env vars)");
     }
 
     orchestrator = new Orchestrator({

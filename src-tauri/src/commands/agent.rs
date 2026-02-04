@@ -2,6 +2,16 @@ use crate::bridge::SidecarBridge;
 use crate::db::DbPool;
 use crate::types::agent::{AgentState, AgentStatus};
 
+/// Read a value from app config JSON, falling back to an environment variable.
+fn config_or_env(app_config: &serde_json::Value, config_key: &str, env_var: &str) -> String {
+    app_config
+        .get(config_key)
+        .and_then(|k| k.as_str())
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .unwrap_or_else(|| std::env::var(env_var).unwrap_or_default())
+}
+
 #[tauri::command]
 pub async fn agent_start(
     app: tauri::AppHandle,
@@ -9,14 +19,31 @@ pub async fn agent_start(
     bridge: tauri::State<'_, SidecarBridge>,
     config: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    // Get credentials from DB
+    // Get Alpaca credentials: DB first, then env vars
     let creds = crate::commands::credentials::credentials_get_db(&pool, "paper")?;
-    let creds = creds.ok_or("Alpaca credentials not set. Go to Settings to configure.")?;
+    let (alpaca_key, alpaca_secret) = match creds {
+        Some(c) => (c.key_id, c.secret_key),
+        None => {
+            let key = std::env::var("ALPACA_KEY_ID")
+                .map_err(|_| "Alpaca credentials not set. Configure in Settings or set ALPACA_KEY_ID/ALPACA_SECRET_KEY env vars.")?;
+            let secret = std::env::var("ALPACA_SECRET_KEY")
+                .map_err(|_| "ALPACA_SECRET_KEY env var not set.")?;
+            (key, secret)
+        }
+    };
 
-    // Get LLM keys from config
+    // Get LLM keys from config DB, falling back to env vars
     let app_config = crate::commands::config::config_get_db(&pool)?;
     let app_config: serde_json::Value =
         serde_json::from_str(&app_config).unwrap_or(serde_json::json!({}));
+
+    let anthropic_key = config_or_env(&app_config, "anthropicApiKey", "ANTHROPIC_API_KEY");
+    let openrouter_key = config_or_env(&app_config, "openrouterApiKey", "OPENROUTER_API_KEY");
+
+    let model = app_config
+        .get("model")
+        .and_then(|m| m.as_str())
+        .unwrap_or("claude-3-5-haiku-20241022");
 
     // Build agent:start params merging stored config with provided overrides
     let symbols = config
@@ -34,25 +61,10 @@ pub async fn agent_start(
         .and_then(|f| f.as_str())
         .unwrap_or("iex");
 
-    let anthropic_key = app_config
-        .get("anthropicApiKey")
-        .and_then(|k| k.as_str())
-        .unwrap_or("");
-
-    let openrouter_key = app_config
-        .get("openrouterApiKey")
-        .and_then(|k| k.as_str())
-        .unwrap_or("");
-
-    let model = app_config
-        .get("model")
-        .and_then(|m| m.as_str())
-        .unwrap_or("claude-3-5-haiku-20241022");
-
     let agent_params = serde_json::json!({
         "alpaca": {
-            "keyId": creds.key_id,
-            "secretKey": creds.secret_key,
+            "keyId": alpaca_key,
+            "secretKey": alpaca_secret,
             "symbols": symbols,
             "feed": feed,
         },
@@ -91,8 +103,6 @@ pub fn agent_status(
     bridge: tauri::State<'_, SidecarBridge>,
 ) -> AgentStatus {
     if bridge.is_running() {
-        // In a full implementation, we'd query the agent via JSON-RPC
-        // For now return running status when bridge is active
         AgentStatus {
             state: AgentState::Running,
             current_session_id: None,
