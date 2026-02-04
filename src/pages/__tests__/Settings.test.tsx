@@ -9,6 +9,11 @@ describe("Settings", () => {
     onAgentStart: vi.fn(),
     onAgentStop: vi.fn(),
     agentRunning: false,
+    watchlist: [] as string[],
+    pendingChanges: false,
+    onRemoveSymbol: vi.fn(),
+    onNavigateWatchlist: vi.fn(),
+    onApplyChanges: vi.fn(),
   };
 
   it("renders heading", () => {
@@ -28,9 +33,27 @@ describe("Settings", () => {
     expect(screen.getByLabelText(/openrouter api key/i)).toBeDefined();
   });
 
-  it("renders symbol input", () => {
-    render(<Settings {...defaultProps} />);
-    expect(screen.getByLabelText(/symbols/i)).toBeDefined();
+  it("renders symbol chips", () => {
+    render(<Settings {...defaultProps} watchlist={["AAPL", "TSLA"]} />);
+    expect(screen.getByText("AAPL")).toBeDefined();
+    expect(screen.getByText("TSLA")).toBeDefined();
+  });
+
+  it("renders Manage Watchlist link", () => {
+    render(<Settings {...defaultProps} watchlist={[]} />);
+    expect(screen.getByText(/manage watchlist/i)).toBeDefined();
+  });
+
+  it("calls onRemoveSymbol when chip x clicked", () => {
+    const handler = vi.fn();
+    render(<Settings {...defaultProps} watchlist={["AAPL"]} onRemoveSymbol={handler} />);
+    fireEvent.click(screen.getByLabelText("Remove AAPL"));
+    expect(handler).toHaveBeenCalledWith("AAPL");
+  });
+
+  it("shows Apply Changes when pendingChanges is true", () => {
+    render(<Settings {...defaultProps} pendingChanges={true} />);
+    expect(screen.getByText(/apply changes/i)).toBeDefined();
   });
 
   it("calls onCredentialsSave when Save Credentials clicked", () => {

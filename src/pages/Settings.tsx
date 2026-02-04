@@ -1,11 +1,17 @@
 import { useState } from "react";
+import { SymbolChips } from "../components/SymbolChips.js";
 
 type Props = {
   onCredentialsSave: (keyId: string, secretKey: string) => void;
-  onConfigSave: (config: { anthropicApiKey: string; openrouterApiKey: string; symbols: string; model: string }) => void;
+  onConfigSave: (config: { anthropicApiKey: string; openrouterApiKey: string; model: string }) => void;
   onAgentStart: () => void;
   onAgentStop: () => void;
   agentRunning: boolean;
+  watchlist: string[];
+  pendingChanges: boolean;
+  onRemoveSymbol: (symbol: string) => void;
+  onNavigateWatchlist: () => void;
+  onApplyChanges: () => void;
 };
 
 export function Settings({
@@ -14,12 +20,16 @@ export function Settings({
   onAgentStart,
   onAgentStop,
   agentRunning,
+  watchlist,
+  pendingChanges,
+  onRemoveSymbol,
+  onNavigateWatchlist,
+  onApplyChanges,
 }: Props) {
   const [keyId, setKeyId] = useState("");
   const [secretKey, setSecretKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openrouterKey, setOpenrouterKey] = useState("");
-  const [symbols, setSymbols] = useState("AAPL, TSLA, MSFT");
   const [model, setModel] = useState("claude-3-5-haiku-20241022");
 
   return (
@@ -103,18 +113,24 @@ export function Settings({
         <h3 className="text-accent text-xs uppercase tracking-widest mb-3">Monitoring</h3>
         <div className="bg-bg-surface border border-border rounded-sm p-4 space-y-3">
           <div>
-            <label htmlFor="symbols" className="block text-text-muted text-xs mb-1">
-              Symbols
-            </label>
-            <input
-              id="symbols"
-              type="text"
-              value={symbols}
-              onChange={(e) => setSymbols(e.target.value)}
-              placeholder="AAPL, TSLA, MSFT"
-              className="w-full bg-bg-primary text-text-primary text-xs p-2 rounded-sm border border-border outline-none font-mono focus:border-accent"
-            />
-            <p className="text-text-muted text-xs mt-1">Comma-separated stock symbols</p>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-text-muted text-xs">Symbols</label>
+              <button
+                onClick={onNavigateWatchlist}
+                className="text-accent text-xs hover:underline cursor-pointer bg-transparent border-none font-mono"
+              >
+                Manage Watchlist →
+              </button>
+            </div>
+            <SymbolChips symbols={watchlist} onRemove={onRemoveSymbol} softLimit={20} />
+            {pendingChanges && (
+              <button
+                onClick={onApplyChanges}
+                className="mt-2 px-3 py-1 text-xs bg-accent text-bg-primary rounded-sm cursor-pointer border-none font-mono font-bold hover:opacity-90"
+              >
+                APPLY CHANGES
+              </button>
+            )}
           </div>
           <div>
             <label htmlFor="model" className="block text-text-muted text-xs mb-1">
@@ -132,7 +148,7 @@ export function Settings({
             </select>
           </div>
           <button
-            onClick={() => onConfigSave({ anthropicApiKey: anthropicKey, openrouterApiKey: openrouterKey, symbols, model })}
+            onClick={() => onConfigSave({ anthropicApiKey: anthropicKey, openrouterApiKey: openrouterKey, model })}
             className="px-3 py-1.5 text-xs border border-border rounded-sm text-accent hover:bg-bg-elevated cursor-pointer bg-transparent font-mono"
           >
             SAVE CONFIG
