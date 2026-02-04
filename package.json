@@ -22,6 +22,7 @@
     "@tauri-apps/plugin-shell": "~2.3.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "@finwatch/shared": "workspace:*",
     "zustand": "^5.0.11"
   },
   "pnpm": {

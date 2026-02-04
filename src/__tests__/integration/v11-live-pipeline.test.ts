@@ -17,7 +17,7 @@ describe("v11: live pipeline integration", () => {
     });
 
     expect(data.getState().ticks.length).toBe(before + 1);
-    expect(data.getState().ticks[0].symbol).toBe("AAPL");
+    expect(data.getState().ticks[0]!.symbol).toBe("AAPL");
   });
 
   it("anomaly store updates on simulated anomaly:detected event", () => {
@@ -36,7 +36,7 @@ describe("v11: live pipeline integration", () => {
     });
 
     expect(anomaly.getState().anomalies.length).toBe(before + 1);
-    expect(anomaly.getState().anomalies[0].id).toBe("test-anomaly-1");
+    expect(anomaly.getState().anomalies[0]!.id).toBe("test-anomaly-1");
   });
 
   it("agent store updates on simulated agent:activity event", () => {
@@ -50,7 +50,7 @@ describe("v11: live pipeline integration", () => {
     });
 
     expect(agent.getState().activityLog.length).toBeGreaterThan(0);
-    expect(agent.getState().activityLog[0].type).toBe("cycle_end");
+    expect(agent.getState().activityLog[0]!.type).toBe("cycle_end");
   });
 
   it("multiple ticks accumulate correctly", () => {

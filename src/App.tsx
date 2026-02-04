@@ -84,6 +84,12 @@ export default function App() {
   const backtestState = useSyncExternalStore(backtestStore.subscribe, backtestStore.getState);
   const watchlistState = useSyncExternalStore(watchlistStore.subscribe, watchlistStore.getState);
 
+  const applyWatchlistChanges = () => {
+    const symbols = watchlistStore.getState().watchlist;
+    invoke("config_update", { patch: JSON.stringify({ symbols }) });
+    watchlistStore.getState().markApplied();
+  };
+
   const fetchAssets = () => {
     watchlistStore.getState().setLoading(true);
     invoke("assets_fetch")
@@ -128,11 +134,7 @@ export default function App() {
             onRemoveSymbol={(s) => watchlistStore.getState().removeSymbol(s)}
             onSearchChange={(q) => watchlistStore.getState().setSearchQuery(q)}
             onCategoryChange={(f) => watchlistStore.getState().setCategoryFilter(f)}
-            onApplyChanges={() => {
-              const symbols = watchlistStore.getState().watchlist;
-              invoke("config_update", { patch: JSON.stringify({ symbols }) });
-              watchlistStore.getState().markApplied();
-            }}
+            onApplyChanges={applyWatchlistChanges}
             onFetchAssets={fetchAssets}
           />
         )}
@@ -194,11 +196,7 @@ export default function App() {
             pendingChanges={watchlistState.pendingChanges}
             onRemoveSymbol={(s) => watchlistStore.getState().removeSymbol(s)}
             onNavigateWatchlist={() => setActiveTab("Watchlist")}
-            onApplyChanges={() => {
-              const symbols = watchlistStore.getState().watchlist;
-              invoke("config_update", { patch: JSON.stringify({ symbols }) });
-              watchlistStore.getState().markApplied();
-            }}
+            onApplyChanges={applyWatchlistChanges}
           />
         )}
       </main>

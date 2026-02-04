@@ -9,7 +9,9 @@ const mockAnomaly = {
   symbol: "AAPL",
   description: "Price spike detected",
   timestamp: Date.now(),
-  metadata: {},
+  metrics: { priceChange: 0.15, volume: 1000000 },
+  preScreenScore: 0.85,
+  sessionId: "test-session",
 };
 
 describe("AnomalyFeed", () => {

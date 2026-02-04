@@ -24,7 +24,7 @@ describe("dataSlice", () => {
   it("adds a tick", () => {
     slice.getState().addTick(tick);
     expect(slice.getState().ticks).toHaveLength(1);
-    expect(slice.getState().ticks[0].symbol).toBe("AAPL");
+    expect(slice.getState().ticks[0]!.symbol).toBe("AAPL");
   });
 
   it("limits ticks to maxSize", () => {

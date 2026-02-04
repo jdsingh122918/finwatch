@@ -63,7 +63,7 @@ describe("backtest-slice", () => {
   it("adds a completed run", () => {
     slice.getState().addRun(mockResult);
     expect(slice.getState().runs).toHaveLength(1);
-    expect(slice.getState().runs[0].id).toBe("bt-001");
+    expect(slice.getState().runs[0]!.id).toBe("bt-001");
   });
 
   it("removes a run", () => {
@@ -89,9 +89,9 @@ describe("backtest-slice", () => {
     slice.getState().addRun(updatedResult);
 
     expect(slice.getState().runs).toHaveLength(1);
-    expect(slice.getState().runs[0].id).toBe("bt-001");
-    expect(slice.getState().runs[0].status).toBe("failed");
-    expect(slice.getState().runs[0].error).toBe("timeout");
+    expect(slice.getState().runs[0]!.id).toBe("bt-001");
+    expect(slice.getState().runs[0]!.status).toBe("failed");
+    expect(slice.getState().runs[0]!.error).toBe("timeout");
   });
 
   it("addRun prepends new runs to front", () => {
@@ -105,8 +105,8 @@ describe("backtest-slice", () => {
     slice.getState().addRun(secondResult);
 
     expect(slice.getState().runs).toHaveLength(2);
-    expect(slice.getState().runs[0].id).toBe("bt-002");
-    expect(slice.getState().runs[1].id).toBe("bt-001");
+    expect(slice.getState().runs[0]!.id).toBe("bt-002");
+    expect(slice.getState().runs[1]!.id).toBe("bt-001");
   });
 
   it("clears progress when run completes", () => {

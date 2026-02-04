@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AgentLog } from "../AgentLog.js";
+import type { AgentStatus } from "@finwatch/shared";
 
-const idleStatus = { state: "idle", totalCycles: 0, totalAnomalies: 0, uptime: 0 };
+const idleStatus: AgentStatus = { state: "idle", totalCycles: 0, totalAnomalies: 0, uptime: 0 };
 
 describe("AgentLog", () => {
   it("renders heading", () => {
@@ -30,8 +31,8 @@ describe("AgentLog", () => {
 
   it("renders log entries", () => {
     const log = [
-      { type: "info", message: "Cycle started", timestamp: Date.now() },
-      { type: "error", message: "Connection failed", timestamp: Date.now() },
+      { type: "cycle_start" as const, message: "Cycle started", timestamp: Date.now() },
+      { type: "error" as const, message: "Connection failed", timestamp: Date.now() },
     ];
     render(<AgentLog status={idleStatus} log={log} />);
     expect(screen.getByText(/cycle started/i)).toBeTruthy();

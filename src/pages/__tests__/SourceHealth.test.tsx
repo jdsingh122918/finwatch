@@ -20,14 +20,14 @@ describe("SourceHealth", () => {
         status: "healthy" as const,
         latencyMs: 42,
         failCount: 0,
-        lastSeen: Date.now(),
+        lastSuccess: Date.now(),
       },
       polygon: {
         sourceId: "polygon",
         status: "degraded" as const,
         latencyMs: 350,
         failCount: 2,
-        lastSeen: Date.now(),
+        lastSuccess: Date.now(),
       },
     };
     render(<SourceHealth sources={sources} />);

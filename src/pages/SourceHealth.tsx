@@ -38,7 +38,7 @@ export function SourceHealth({ sources }: Props) {
               <span className="w-20 text-right">{s.latencyMs}ms</span>
               <span className="w-16 text-right">{s.failCount}</span>
               <span className="flex-1 text-right text-text-muted">
-                {new Date(s.lastSeen).toLocaleTimeString()}
+                {new Date(s.lastSuccess).toLocaleTimeString()}
               </span>
             </div>
           ))}
