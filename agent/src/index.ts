@@ -1,6 +1,8 @@
 import "dotenv/config";
-import type { LLMProvider } from "@finwatch/shared";
+import type { LLMProvider, SourceConfig } from "@finwatch/shared";
+import WebSocket from "ws";
 import { JsonRpcServer } from "./ipc/json-rpc-server.js";
+import { AlpacaStreamSource } from "./ingestion/alpaca-stream-source.js";
 import { Orchestrator } from "./orchestrator.js";
 import { AnthropicProvider } from "./providers/anthropic-provider.js";
 import { OpenRouterProvider } from "./providers/openrouter-provider.js";
@@ -64,6 +66,27 @@ export function createAgentServer(): JsonRpcServer {
       },
       buffer: { flushIntervalMs: 5000, urgentThreshold: 0.8 },
     });
+
+    // Register the Alpaca streaming data source
+    const alpacaConfig: SourceConfig = {
+      id: "alpaca-stream",
+      name: "Alpaca Market Stream",
+      type: "streaming",
+      plugin: "alpaca",
+      config: {
+        feed: p.alpaca.feed,
+        symbols: p.alpaca.symbols,
+        channels: ["trades", "quotes", "bars"],
+        keyId: p.alpaca.keyId,
+        secretKey: p.alpaca.secretKey,
+      },
+      enabled: true,
+    };
+    const alpacaSource = new AlpacaStreamSource(
+      alpacaConfig,
+      (url: string) => new WebSocket(url) as unknown as import("./ingestion/alpaca-stream-source.js").WsLike,
+    );
+    orchestrator.sources.register(alpacaSource);
 
     // Forward events as JSON-RPC notifications to stdout
     orchestrator.on("tick", (tick) => {

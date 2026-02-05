@@ -20,7 +20,7 @@ type AlpacaWsMessage =
   | AlpacaTradeMessage
   | AlpacaQuoteMessage;
 
-type WsLike = {
+export type WsLike = {
   readyState: number;
   send(data: string): void;
   close(): void;
@@ -28,7 +28,7 @@ type WsLike = {
   emit(event: string, ...args: unknown[]): void;
 };
 
-type WsFactory = (url: string) => WsLike;
+export type WsFactory = (url: string) => WsLike;
 
 const WS_ENDPOINTS: Record<string, string> = {
   iex: "wss://stream.data.alpaca.markets/v2/iex",

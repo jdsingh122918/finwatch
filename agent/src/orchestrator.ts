@@ -29,6 +29,8 @@ export class Orchestrator extends EventEmitter {
   private readonly buffer: DataBuffer;
   private readonly monitor: MonitorLoop;
   private running = false;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private static readonly SOURCE_POLL_INTERVAL_MS = 1000;
 
   constructor(config: OrchestratorConfig) {
     super();
@@ -70,6 +72,7 @@ export class Orchestrator extends EventEmitter {
     if (this.running) return;
     this.running = true;
     await this.registry.startAll();
+    this.startSourcePolling();
     this.monitor.start();
     this.emit("activity", { type: "cycle_start", message: "Orchestrator started", timestamp: Date.now() });
   }
@@ -77,6 +80,7 @@ export class Orchestrator extends EventEmitter {
   async stop(): Promise<void> {
     if (!this.running) return;
     this.running = false;
+    this.stopSourcePolling();
     this.monitor.stop();
     await this.registry.stopAll();
     this.buffer.destroy();
@@ -85,5 +89,31 @@ export class Orchestrator extends EventEmitter {
   /** Expose registry for adding sources externally. */
   get sources(): SourceRegistry {
     return this.registry;
+  }
+
+  private startSourcePolling(): void {
+    this.pollTimer = setInterval(() => {
+      void this.pollSources();
+    }, Orchestrator.SOURCE_POLL_INTERVAL_MS);
+  }
+
+  private stopSourcePolling(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
+  private async pollSources(): Promise<void> {
+    for (const source of this.registry.list()) {
+      try {
+        const ticks = await source.fetch();
+        for (const tick of ticks) {
+          this.injectTick(tick);
+        }
+      } catch {
+        // Source fetch failures are non-fatal; health checks track degradation
+      }
+    }
   }
 }
