@@ -2,7 +2,7 @@ import "dotenv/config";
 import type { LLMProvider, SourceConfig } from "@finwatch/shared";
 import WebSocket from "ws";
 import { JsonRpcServer } from "./ipc/json-rpc-server.js";
-import { AlpacaStreamSource } from "./ingestion/alpaca-stream-source.js";
+import { AlpacaStreamSource, type WsLike } from "./ingestion/alpaca-stream-source.js";
 import { Orchestrator } from "./orchestrator.js";
 import { AnthropicProvider } from "./providers/anthropic-provider.js";
 import { OpenRouterProvider } from "./providers/openrouter-provider.js";
@@ -84,7 +84,7 @@ export function createAgentServer(): JsonRpcServer {
     };
     const alpacaSource = new AlpacaStreamSource(
       alpacaConfig,
-      (url: string) => new WebSocket(url) as unknown as import("./ingestion/alpaca-stream-source.js").WsLike,
+      (url: string) => new WebSocket(url) as unknown as WsLike,
     );
     orchestrator.sources.register(alpacaSource);
 

@@ -4,6 +4,7 @@ import { DataBuffer } from "./ingestion/data-buffer.js";
 import { SourceRegistry } from "./ingestion/source-registry.js";
 import { MonitorLoop } from "./analysis/monitor-loop.js";
 import { withFallback } from "./providers/fallback.js";
+import { createLogger } from "./utils/logger.js";
 
 export type OrchestratorConfig = {
   alpaca: {
@@ -29,8 +30,10 @@ export class Orchestrator extends EventEmitter {
   private readonly buffer: DataBuffer;
   private readonly monitor: MonitorLoop;
   private running = false;
+  private polling = false;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private static readonly SOURCE_POLL_INTERVAL_MS = 1000;
+  private log = createLogger("orchestrator");
 
   constructor(config: OrchestratorConfig) {
     super();
@@ -105,15 +108,24 @@ export class Orchestrator extends EventEmitter {
   }
 
   private async pollSources(): Promise<void> {
-    for (const source of this.registry.list()) {
-      try {
-        const ticks = await source.fetch();
-        for (const tick of ticks) {
-          this.injectTick(tick);
+    if (this.polling) return;
+    this.polling = true;
+    try {
+      for (const source of this.registry.list()) {
+        try {
+          const ticks = await source.fetch();
+          for (const tick of ticks) {
+            this.injectTick(tick);
+          }
+        } catch (err) {
+          this.log.warn("Source fetch failed", {
+            sourceId: source.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
-      } catch {
-        // Source fetch failures are non-fatal; health checks track degradation
       }
+    } finally {
+      this.polling = false;
     }
   }
 }
