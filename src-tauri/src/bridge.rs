@@ -42,9 +42,13 @@ impl SidecarBridge {
 
         self.supervisor.set_state(SidecarState::Starting);
 
-        let mut child = Command::new("node")
-            .arg("--import")
-            .arg("tsx")
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let project_root = manifest_dir.parent().unwrap_or(manifest_dir);
+
+        let tsx_bin = project_root.join("node_modules/.bin/tsx");
+
+        let mut child = Command::new(tsx_bin)
+            .current_dir(project_root)
             .arg(agent_script)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -54,15 +58,28 @@ impl SidecarBridge {
 
         let stdin = child.stdin.take().ok_or("Failed to get stdin")?;
         let stdout = child.stdout.take().ok_or("Failed to get stdout")?;
+        let stderr = child.stderr.take().ok_or("Failed to get stderr")?;
 
         *self.stdin_writer.lock().unwrap() = Some(stdin);
         *self.child.lock().unwrap() = Some(child);
+
+        // Spawn stderr reader thread to capture agent logs
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                match line {
+                    Ok(text) => eprintln!("[agent-stderr] {}", text),
+                    Err(_) => break,
+                }
+            }
+        });
 
         self.supervisor.record_started();
 
         // Spawn stdout reader thread
         thread::spawn(move || {
             let reader = BufReader::new(stdout);
+            eprintln!("[bridge] Stdout reader thread started");
             for line in reader.lines() {
                 match line {
                     Ok(text) => {
@@ -70,23 +87,31 @@ impl SidecarBridge {
                         if text.is_empty() {
                             continue;
                         }
+                        eprintln!("[bridge] Raw stdout: {}", &text[..text.len().min(200)]);
                         // Try to parse as JSON
                         if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
                             // Notifications have no "id" field
                             if parsed.get("id").is_none() {
                                 if let Some(method) = parsed.get("method").and_then(|m| m.as_str())
                                 {
+                                    eprintln!("[bridge] Routing notification: {}", method);
                                     let params = parsed.get("params").cloned();
                                     route_notification(&app, method, params);
                                 }
+                            } else {
+                                eprintln!("[bridge] Response (id={}): ignoring", parsed.get("id").unwrap());
                             }
-                            // Responses with "id" are logged but not routed
-                            // (async request/response handled via send_request)
+                        } else {
+                            eprintln!("[bridge] Non-JSON stdout: {}", &text[..text.len().min(100)]);
                         }
                     }
-                    Err(_) => break,
+                    Err(e) => {
+                        eprintln!("[bridge] Stdout read error: {}", e);
+                        break;
+                    }
                 }
             }
+            eprintln!("[bridge] Stdout reader thread exiting");
         });
 
         Ok(())
@@ -152,9 +177,17 @@ fn route_notification<R: Runtime>(app: &AppHandle<R>, method: &str, params: Opti
         "agent:activity" => event_names::AGENT_ACTIVITY,
         "source:health-change" => event_names::SOURCE_HEALTH_CHANGE,
         "memory:updated" => event_names::MEMORY_UPDATED,
-        _ => return, // Unknown notification, skip
+        "backtest:progress" => event_names::BACKTEST_PROGRESS,
+        "backtest:complete" => event_names::BACKTEST_COMPLETE,
+        _ => {
+            eprintln!("[bridge] Unknown notification method: {}", method);
+            return;
+        }
     };
-    let _ = emit_event(app, event, payload);
+    match emit_event(app, event, payload) {
+        Ok(()) => eprintln!("[bridge] Emitted Tauri event: {}", event),
+        Err(e) => eprintln!("[bridge] Failed to emit Tauri event {}: {}", event, e),
+    }
 }
 
 #[cfg(test)]

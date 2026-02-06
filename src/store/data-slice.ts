@@ -15,10 +15,12 @@ export type DataSlice = ReturnType<typeof createDataSlice>;
 export function createDataSlice() {
   return createStore<DataState>((set, get) => ({
     ticks: [],
-    addTick: (tick) =>
+    addTick: (tick) => {
+      console.log("[data-slice] addTick called", tick.symbol, tick.sourceId);
       set((state) => ({
         ticks: [...state.ticks, tick].slice(-MAX_TICKS),
-      })),
+      }));
+    },
     clearTicks: () => set({ ticks: [] }),
     latestBySymbol: () => {
       const map = new Map<string, DataTick>();

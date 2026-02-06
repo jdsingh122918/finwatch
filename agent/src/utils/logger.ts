@@ -13,16 +13,11 @@ type LogHandler = (entry: LogEntry) => void;
 let handler: LogHandler = (entry) => {
   const prefix = `[${entry.level.toUpperCase()}] [${entry.module}]`;
   const msg = `${prefix} ${entry.message}`;
-  switch (entry.level) {
-    case "error":
-      console.error(msg, entry.data ?? "");
-      break;
-    case "warn":
-      console.warn(msg, entry.data ?? "");
-      break;
-    default:
-      console.log(msg, entry.data ?? "");
-      break;
+  // All agent logs go to stderr to avoid corrupting the stdout JSON-RPC channel
+  if (entry.data && Object.keys(entry.data).length > 0) {
+    console.error(msg, JSON.stringify(entry.data));
+  } else {
+    console.error(msg);
   }
 };
 

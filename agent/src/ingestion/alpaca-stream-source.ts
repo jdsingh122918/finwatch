@@ -100,6 +100,9 @@ export class AlpacaStreamSource implements DataSource {
   async fetch(): Promise<DataTick[]> {
     const ticks = this.tickBuffer;
     this.tickBuffer = [];
+    if (ticks.length > 0) {
+      this.log.info("Draining tick buffer", { count: ticks.length, symbols: [...new Set(ticks.map(t => t.symbol).filter(Boolean))] });
+    }
     return ticks;
   }
 
@@ -131,10 +134,11 @@ export class AlpacaStreamSource implements DataSource {
     this.ws = this.wsFactory(endpoint);
 
     this.ws.on("open", () => {
-      // Wait for server's "connected" message before sending auth
+      this.log.info("WebSocket open, waiting for server connected message");
     });
 
     this.ws.on("message", (event: unknown) => {
+      this.log.info("WebSocket message received", { type: typeof event, isBuffer: Buffer.isBuffer(event), preview: String(event).slice(0, 200) });
       this.handleMessage(event);
     });
 
@@ -168,10 +172,14 @@ export class AlpacaStreamSource implements DataSource {
   }
 
   private handleMessage(event: unknown): void {
-    const raw =
-      typeof event === "string"
-        ? event
-        : (event as { data?: string })?.data;
+    let raw: string | undefined;
+    if (typeof event === "string") {
+      raw = event;
+    } else if (Buffer.isBuffer(event)) {
+      raw = event.toString("utf-8");
+    } else {
+      raw = (event as { data?: string })?.data;
+    }
 
     if (typeof raw !== "string") return;
 

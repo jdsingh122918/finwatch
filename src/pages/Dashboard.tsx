@@ -3,6 +3,8 @@ import type { DataTick } from "@finwatch/shared";
 type Props = { ticks: DataTick[] };
 
 export function Dashboard({ ticks }: Props) {
+  console.log("[Dashboard] Rendering with", ticks.length, "ticks");
+
   const latestBySymbol = new Map<string, DataTick>();
   for (const tick of ticks) {
     if (tick.symbol) {

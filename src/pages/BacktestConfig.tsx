@@ -32,10 +32,23 @@ export function BacktestConfigPage({ progress, onProgress, onComplete, runs, onV
   const currentIdRef = useRef<string | null>(null);
 
   useTauriEvent<BacktestProgress>("backtest:progress", onProgress);
-  useTauriEvent<{ backtestId: string }>("backtest:complete", (payload) => {
-    setRunning(false);
-    onComplete(payload.backtestId);
-  });
+  useTauriEvent<{ backtestId: string; status: string; metrics?: object; trades?: object[]; equityCurve?: object[]; error?: string }>(
+    "backtest:complete",
+    async (payload) => {
+      setRunning(false);
+      try {
+        await invoke("backtest_update_status", {
+          backtestId: payload.backtestId,
+          status: payload.status,
+          metrics: payload.metrics ? JSON.stringify(payload.metrics) : null,
+          error: payload.error ?? null,
+        });
+      } catch (e) {
+        console.error("Failed to update backtest status:", e);
+      }
+      onComplete(payload.backtestId);
+    },
+  );
 
   const handleStart = async () => {
     setError(null);

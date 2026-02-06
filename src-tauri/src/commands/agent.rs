@@ -3,7 +3,7 @@ use crate::db::DbPool;
 use crate::types::agent::{AgentState, AgentStatus};
 
 /// Read a value from app config JSON, falling back to an environment variable.
-fn config_or_env(app_config: &serde_json::Value, config_key: &str, env_var: &str) -> String {
+pub(crate) fn config_or_env(app_config: &serde_json::Value, config_key: &str, env_var: &str) -> String {
     app_config
         .get(config_key)
         .and_then(|k| k.as_str())
@@ -54,7 +54,7 @@ pub async fn agent_start(
                 .filter_map(|v| v.as_str().map(String::from))
                 .collect::<Vec<_>>()
         })
-        .unwrap_or_else(|| vec!["AAPL".to_string()]);
+        .unwrap_or_else(|| vec!["NET".to_string()]);
 
     let feed = config
         .get("feed")
@@ -77,13 +77,21 @@ pub async fn agent_start(
         },
     });
 
+    eprintln!("[agent_start] Symbols: {:?}, Feed: {}", symbols, feed);
+
     // Spawn sidecar if not running
     if !bridge.is_running() {
+        eprintln!("[agent_start] Spawning sidecar");
         bridge.spawn(app, "agent/src/index.ts")?;
+        eprintln!("[agent_start] Sidecar spawned");
+    } else {
+        eprintln!("[agent_start] Sidecar already running");
     }
 
     // Send agent:start command
+    eprintln!("[agent_start] Sending agent:start JSON-RPC request");
     let response = bridge.send_request("agent:start", Some(agent_params))?;
+    eprintln!("[agent_start] Got response: {:?}", response.result);
     Ok(response.result.unwrap_or(serde_json::json!({"status": "started"})))
 }
 

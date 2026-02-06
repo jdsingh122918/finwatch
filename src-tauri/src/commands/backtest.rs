@@ -1,3 +1,5 @@
+use crate::bridge::SidecarBridge;
+use crate::commands::agent::config_or_env;
 use crate::db::DbPool;
 use crate::types::backtest::{BacktestConfig, BacktestSummary, BacktestTrade};
 
@@ -213,15 +215,66 @@ pub fn backtest_delete_db(pool: &DbPool, id: &str) -> Result<(), String> {
 /// Start a new backtest run.
 ///
 /// Deserializes the config JSON into a typed `BacktestConfig`, validates it,
-/// inserts a new row with status `"running"`, and returns the backtest ID.
+/// inserts a new row with status `"running"`, resolves credentials, spawns
+/// the sidecar if needed, and sends a `backtest:run` JSON-RPC request.
 #[tauri::command]
-pub fn backtest_start(
+pub async fn backtest_start(
+    app: tauri::AppHandle,
     pool: tauri::State<'_, DbPool>,
+    bridge: tauri::State<'_, SidecarBridge>,
     config: String,
 ) -> Result<String, String> {
     let parsed: BacktestConfig = serde_json::from_str(&config)
         .map_err(|e| format!("Invalid backtest config: {}", e))?;
     backtest_insert_db(&pool, &parsed.id, &config)?;
+
+    // Resolve Alpaca credentials: DB first, then env vars
+    let creds = crate::commands::credentials::credentials_get_db(&pool, "paper")?;
+    let (alpaca_key, alpaca_secret) = match creds {
+        Some(c) => (c.key_id, c.secret_key),
+        None => {
+            let key = std::env::var("ALPACA_KEY_ID")
+                .map_err(|_| "Alpaca credentials not set. Configure in Settings or set ALPACA_KEY_ID/ALPACA_SECRET_KEY env vars.")?;
+            let secret = std::env::var("ALPACA_SECRET_KEY")
+                .map_err(|_| "ALPACA_SECRET_KEY env var not set.")?;
+            (key, secret)
+        }
+    };
+
+    // Resolve LLM keys from config DB, falling back to env vars
+    let app_config = crate::commands::config::config_get_db(&pool)?;
+    let app_config: serde_json::Value =
+        serde_json::from_str(&app_config).unwrap_or(serde_json::json!({}));
+
+    let anthropic_key = config_or_env(&app_config, "anthropicApiKey", "ANTHROPIC_API_KEY");
+    let openrouter_key = config_or_env(&app_config, "openrouterApiKey", "OPENROUTER_API_KEY");
+
+    let model = app_config
+        .get("model")
+        .and_then(|m| m.as_str())
+        .unwrap_or("claude-3-5-haiku-20241022");
+
+    // Auto-spawn sidecar if not running
+    if !bridge.is_running() {
+        bridge.spawn(app, "agent/src/index.ts")?;
+    }
+
+    // Send backtest:run JSON-RPC request
+    let parsed_config: serde_json::Value = serde_json::from_str(&config)
+        .map_err(|e| format!("Invalid config: {}", e))?;
+    let backtest_params = serde_json::json!({
+        "config": parsed_config,
+        "alpaca": { "keyId": alpaca_key, "secretKey": alpaca_secret },
+        "llm": {
+            "anthropicApiKey": anthropic_key,
+            "openrouterApiKey": openrouter_key,
+            "model": model,
+            "maxTokens": 4096,
+            "temperature": 0.3
+        }
+    });
+    bridge.send_request("backtest:run", Some(backtest_params))?;
+
     Ok(parsed.id)
 }
 
@@ -260,11 +313,12 @@ pub fn backtest_delete(
 
 /// Cancel a running backtest by setting its status to `"cancelled"`.
 ///
-/// Only affects backtests that are currently in `"running"` status.
-/// Note: full agent cancellation via JSON-RPC is a follow-up task.
+/// Updates the DB status and sends a `backtest:cancel` JSON-RPC request
+/// to the agent sidecar (best-effort).
 #[tauri::command]
 pub fn backtest_cancel(
     pool: tauri::State<'_, DbPool>,
+    bridge: tauri::State<'_, SidecarBridge>,
     backtest_id: String,
 ) -> Result<(), String> {
     let conn = pool.get().map_err(|e| e.to_string())?;
@@ -278,7 +332,28 @@ pub fn backtest_cancel(
         rusqlite::params![now, backtest_id],
     )
     .map_err(|e| e.to_string())?;
+
+    // Best-effort: notify the agent to cancel the running backtest
+    if bridge.is_running() {
+        let _ = bridge.send_request("backtest:cancel", Some(serde_json::json!({ "backtestId": backtest_id })));
+    }
+
     Ok(())
+}
+
+/// Update the status of an existing backtest run from the frontend.
+///
+/// Called when the UI receives a `backtest:complete` event to persist
+/// the final status, metrics, and any error message to the database.
+#[tauri::command]
+pub fn backtest_update_status(
+    pool: tauri::State<'_, DbPool>,
+    backtest_id: String,
+    status: String,
+    metrics: Option<String>,
+    error: Option<String>,
+) -> Result<(), String> {
+    backtest_update_status_db(&pool, &backtest_id, &status, metrics.as_deref(), error.as_deref())
 }
 
 #[cfg(test)]

@@ -8,6 +8,8 @@ pub mod event_names {
     pub const ANOMALY_DETECTED: &str = "anomaly:detected";
     pub const SOURCE_HEALTH_CHANGE: &str = "source:health-change";
     pub const MEMORY_UPDATED: &str = "memory:updated";
+    pub const BACKTEST_PROGRESS: &str = "backtest:progress";
+    pub const BACKTEST_COMPLETE: &str = "backtest:complete";
 }
 
 pub fn emit_event<R: Runtime, T: Serialize + Clone>(
@@ -29,6 +31,8 @@ mod tests {
         assert_eq!(ANOMALY_DETECTED, "anomaly:detected");
         assert_eq!(SOURCE_HEALTH_CHANGE, "source:health-change");
         assert_eq!(MEMORY_UPDATED, "memory:updated");
+        assert_eq!(BACKTEST_PROGRESS, "backtest:progress");
+        assert_eq!(BACKTEST_COMPLETE, "backtest:complete");
     }
 
     #[test]

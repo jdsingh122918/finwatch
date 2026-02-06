@@ -47,6 +47,7 @@ pub fn run() {
             commands::backtest::backtest_get_trades,
             commands::backtest::backtest_delete,
             commands::backtest::backtest_cancel,
+            commands::backtest::backtest_update_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

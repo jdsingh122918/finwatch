@@ -87,4 +87,84 @@ export class AlpacaBackfill {
     }
     return allTicks;
   }
+
+  async fetchDateRange(
+    symbol: string,
+    startDate: string,
+    endDate: string,
+    timeframe: string,
+  ): Promise<DataTick[]> {
+    this.log.info("Fetching date range", { symbol, startDate, endDate, timeframe });
+
+    const allTicks: DataTick[] = [];
+    let pageToken: string | null = null;
+
+    do {
+      const params = new URLSearchParams({
+        start: new Date(startDate).toISOString(),
+        end: new Date(endDate).toISOString(),
+        timeframe,
+        limit: "10000",
+      });
+
+      if (pageToken) {
+        params.set("page_token", pageToken);
+      }
+
+      const url = `${this.config.baseUrl}/v2/stocks/${encodeURIComponent(symbol)}/bars?${params}`;
+      const response = await globalThis.fetch(url, {
+        headers: {
+          "APCA-API-KEY-ID": this.config.keyId,
+          "APCA-API-SECRET-KEY": this.config.secretKey,
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(
+          `Alpaca bars API returned HTTP ${response.status} for ${symbol}: ${text}`,
+        );
+      }
+
+      const data = (await response.json()) as BarsResponse;
+
+      const ticks = (data.bars ?? []).map((bar): DataTick => ({
+        sourceId: this.config.sourceId,
+        timestamp: new Date(bar.t).getTime(),
+        symbol: symbol.toUpperCase(),
+        metrics: {
+          open: bar.o,
+          high: bar.h,
+          low: bar.l,
+          close: bar.c,
+          volume: bar.v,
+        },
+        metadata: { alpacaType: "bar", backfill: true },
+        raw: bar,
+      }));
+
+      allTicks.push(...ticks);
+      pageToken = data.next_page_token;
+    } while (pageToken);
+
+    return allTicks;
+  }
+
+  async fetchAllDateRange(
+    symbols: string[],
+    startDate: string,
+    endDate: string,
+    timeframe: string,
+  ): Promise<DataTick[]> {
+    const allTicks: DataTick[] = [];
+    for (const symbol of symbols) {
+      try {
+        const ticks = await this.fetchDateRange(symbol, startDate, endDate, timeframe);
+        allTicks.push(...ticks);
+      } catch {
+        this.log.warn("Failed to fetch date range for symbol, skipping", { symbol });
+      }
+    }
+    return allTicks;
+  }
 }

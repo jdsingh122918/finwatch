@@ -199,4 +199,134 @@ describe("AlpacaBackfill", () => {
     const ticks = await backfill.fetchBars("XYZ", 30);
     expect(ticks).toHaveLength(0);
   });
+
+  describe("fetchDateRange", () => {
+    it("constructs correct URL with start/end/timeframe params", async () => {
+      const mockFetch = makeMockFetch();
+      globalThis.fetch = mockFetch;
+
+      const backfill = new AlpacaBackfill({
+        sourceId: "alpaca-stream",
+        keyId: "MY_KEY",
+        secretKey: "MY_SECRET",
+        baseUrl: "https://data.alpaca.markets",
+      });
+
+      await backfill.fetchDateRange("AAPL", "2024-01-01", "2024-06-30", "1Day");
+
+      expect(mockFetch).toHaveBeenCalled();
+      const [url] = (mockFetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+      expect(url).toContain("/v2/stocks/AAPL/bars");
+      const parsed = new URL(url);
+      expect(parsed.searchParams.get("start")).toBe("2024-01-01T00:00:00.000Z");
+      expect(parsed.searchParams.get("end")).toBe("2024-06-30T00:00:00.000Z");
+      expect(parsed.searchParams.get("timeframe")).toBe("1Day");
+      expect(parsed.searchParams.get("limit")).toBe("10000");
+    });
+
+    it("handles pagination via next_page_token", async () => {
+      const page1Bars = [MOCK_BARS[0]!];
+      const page2Bars = [MOCK_BARS[1]!, MOCK_BARS[2]!];
+      let callNum = 0;
+
+      globalThis.fetch = vi.fn<[string, RequestInit?], Promise<Response>>().mockImplementation(async (url: string) => {
+        callNum++;
+        if (callNum === 1) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ bars: page1Bars, next_page_token: "TOKEN_ABC" }),
+          } as Response;
+        }
+        // Second call should include page_token param
+        expect(url).toContain("page_token=TOKEN_ABC");
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ bars: page2Bars, next_page_token: null }),
+        } as Response;
+      });
+
+      const backfill = new AlpacaBackfill({
+        sourceId: "alpaca-stream",
+        keyId: "KEY",
+        secretKey: "SECRET",
+        baseUrl: "https://data.alpaca.markets",
+      });
+
+      const ticks = await backfill.fetchDateRange("AAPL", "2024-01-01", "2024-06-30", "1Day");
+
+      expect(ticks).toHaveLength(3);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns DataTick[] with correct fields", async () => {
+      const backfill = new AlpacaBackfill({
+        sourceId: "bt-source",
+        keyId: "KEY",
+        secretKey: "SECRET",
+        baseUrl: "https://data.alpaca.markets",
+      });
+
+      const ticks = await backfill.fetchDateRange("TSLA", "2024-01-01", "2024-03-01", "1Hour");
+
+      expect(ticks).toHaveLength(3);
+      expect(ticks[0]!.sourceId).toBe("bt-source");
+      expect(ticks[0]!.symbol).toBe("TSLA");
+      expect(ticks[0]!.metadata).toEqual(expect.objectContaining({ backfill: true }));
+    });
+  });
+
+  describe("fetchAllDateRange", () => {
+    it("calls fetchDateRange for each symbol and collects all ticks", async () => {
+      const backfill = new AlpacaBackfill({
+        sourceId: "alpaca-stream",
+        keyId: "KEY",
+        secretKey: "SECRET",
+        baseUrl: "https://data.alpaca.markets",
+      });
+
+      const ticks = await backfill.fetchAllDateRange(
+        ["AAPL", "TSLA"],
+        "2024-01-01",
+        "2024-06-30",
+        "1Day",
+      );
+
+      expect(ticks).toHaveLength(6); // 3 bars per symbol
+      const symbols = new Set(ticks.map((t) => t.symbol));
+      expect(symbols).toEqual(new Set(["AAPL", "TSLA"]));
+    });
+
+    it("continues when one symbol fails", async () => {
+      globalThis.fetch = vi.fn<[string, RequestInit?], Promise<Response>>().mockImplementation(async (url: string) => {
+        if (url.includes("/BADTICKER/")) {
+          return { ok: false, status: 404, text: async () => "Not Found" } as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ bars: MOCK_BARS, next_page_token: null }),
+        } as Response;
+      });
+
+      const backfill = new AlpacaBackfill({
+        sourceId: "alpaca-stream",
+        keyId: "KEY",
+        secretKey: "SECRET",
+        baseUrl: "https://data.alpaca.markets",
+      });
+
+      const ticks = await backfill.fetchAllDateRange(
+        ["AAPL", "BADTICKER", "TSLA"],
+        "2024-01-01",
+        "2024-06-30",
+        "1Day",
+      );
+
+      expect(ticks).toHaveLength(6);
+      const symbols = new Set(ticks.map((t) => t.symbol));
+      expect(symbols).toEqual(new Set(["AAPL", "TSLA"]));
+    });
+  });
 });

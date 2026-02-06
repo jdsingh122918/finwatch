@@ -74,7 +74,10 @@ export class Orchestrator extends EventEmitter {
   async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    const sources = this.registry.list();
+    this.log.info("Starting orchestrator", { registeredSources: sources.length, sourceIds: sources.map(s => s.id) });
     await this.registry.startAll();
+    this.log.info("All sources started, beginning poll loop");
     this.startSourcePolling();
     this.monitor.start();
     this.emit("activity", { type: "cycle_start", message: "Orchestrator started", timestamp: Date.now() });
@@ -111,9 +114,13 @@ export class Orchestrator extends EventEmitter {
     if (this.polling) return;
     this.polling = true;
     try {
-      for (const source of this.registry.list()) {
+      const sources = this.registry.list();
+      for (const source of sources) {
         try {
           const ticks = await source.fetch();
+          if (ticks.length > 0) {
+            this.log.info("Polled ticks from source", { sourceId: source.id, tickCount: ticks.length });
+          }
           for (const tick of ticks) {
             this.injectTick(tick);
           }
