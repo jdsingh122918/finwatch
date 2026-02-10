@@ -25,7 +25,7 @@ const mockAnomalies = [
     symbol: "GOOGL",
     description: "Volume dip",
     timestamp: now - 3600_000, // 1 hour ago
-    metrics: { volumeChange: -0.2 },
+    metrics: { volumeChange: -0.2 } as Record<string, number>,
     preScreenScore: 0.4,
     sessionId: "test-session",
   },
@@ -36,7 +36,7 @@ const mockAnomalies = [
     symbol: "AAPL",
     description: "Unusual activity",
     timestamp: now - 7200_000, // 2 hours ago
-    metrics: {},
+    metrics: {} as Record<string, number>,
     preScreenScore: 0.6,
     sessionId: "test-session",
   },

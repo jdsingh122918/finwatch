@@ -49,7 +49,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 export function ToastContainer({ toasts }: { toasts?: Toast[] }) {
   const ctx = useContext(ToastContext);
   const [internalToasts, setInternalToasts] = useState<Toast[]>([]);
-  const nextId = useRef(0);
 
   // Standalone mode (used without provider, with internal state)
   useEffect(() => {

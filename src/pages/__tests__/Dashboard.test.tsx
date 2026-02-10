@@ -92,7 +92,7 @@ describe("Dashboard", () => {
         metadata: {},
       },
     ];
-    const { container } = render(<Dashboard ticks={ticks} />);
+    render(<Dashboard ticks={ticks} />);
     const changeEl = screen.getByText("-3.10%");
     expect(changeEl.className).toContain("text-severity-critical");
   });

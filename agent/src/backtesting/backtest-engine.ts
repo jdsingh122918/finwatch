@@ -153,6 +153,7 @@ export class BacktestEngine {
       // 3. Group ticks by date and iterate chronologically
       // ---------------------------------------------------------------
       const dateGroups = groupByDate(ticks);
+      const dateEntries = [...dateGroups.entries()];
       const totalTicks = ticks.length;
       let ticksProcessed = 0;
       let anomaliesFound = 0;
@@ -162,7 +163,13 @@ export class BacktestEngine {
       let lastTradeSymbol: string | undefined;
       let previousDate: string | undefined;
 
-      for (const [date, dateTicks] of dateGroups) {
+      // Rolling window size: use prior N days as statistical context
+      // so the pre-screener can compute meaningful z-scores
+      const LOOKBACK_DAYS = 20;
+
+      for (let dayIdx = 0; dayIdx < dateEntries.length; dayIdx++) {
+        const [date, dateTicks] = dateEntries[dayIdx]!;
+
         if (this.cancelled) {
           return this.finishCancelled(result, executor);
         }
@@ -173,8 +180,17 @@ export class BacktestEngine {
           previousDate = date;
         }
 
-        // Run analysis on this date batch
-        const anomalies = await this.deps.runAnalysis(dateTicks);
+        // Build rolling window: prior LOOKBACK_DAYS + today's ticks.
+        // This gives the pre-screener enough data for meaningful z-scores.
+        const windowStart = Math.max(0, dayIdx - LOOKBACK_DAYS);
+        const windowTicks: DataTick[] = [];
+        for (let i = windowStart; i < dayIdx; i++) {
+          windowTicks.push(...dateEntries[i]![1]);
+        }
+        windowTicks.push(...dateTicks);
+
+        // Run analysis on the rolling window
+        const anomalies = await this.deps.runAnalysis(windowTicks);
 
         if (this.cancelled) {
           return this.finishCancelled(result, executor);

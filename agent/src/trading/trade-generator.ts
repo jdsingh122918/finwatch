@@ -9,7 +9,7 @@ export type PositionLookup = {
 const ACTIONABLE_SEVERITIES = new Set(["high", "critical"]);
 const DEFAULT_QTY = 1;
 
-type AnomalySignal = "price_spike" | "volume_drop" | "unknown";
+type AnomalySignal = "price_spike" | "price_drop" | "volume_spike" | "volume_drop" | "unknown";
 
 function classifyAnomaly(anomaly: Anomaly): AnomalySignal {
   const desc = anomaly.description.toLowerCase();
@@ -18,9 +18,29 @@ function classifyAnomaly(anomaly: Anomaly): AnomalySignal {
   if (
     desc.includes("price spike") ||
     desc.includes("price jump") ||
-    (metrics.priceChange !== undefined && metrics.priceChange > 0)
+    desc.includes("price surge") ||
+    (metrics.priceChange !== undefined && metrics.priceChange > 0.03)
   ) {
     return "price_spike";
+  }
+
+  if (
+    desc.includes("price drop") ||
+    desc.includes("price decline") ||
+    desc.includes("price fell") ||
+    desc.includes("significant decrease") ||
+    (metrics.priceChange !== undefined && metrics.priceChange < -0.03)
+  ) {
+    return "price_drop";
+  }
+
+  if (
+    desc.includes("volume spike") ||
+    desc.includes("volume surge") ||
+    desc.includes("high volume") ||
+    (metrics.volumeChange !== undefined && metrics.volumeChange > 0.5)
+  ) {
+    return "volume_spike";
   }
 
   if (
@@ -74,18 +94,46 @@ export class TradeGenerator {
 
     switch (signal) {
       case "price_spike":
-        // Price spike → sell (take profit or short)
-        side = "sell";
-        qty = holding ? heldQty : DEFAULT_QTY;
-        rationale = holding
-          ? `Selling ${qty} shares of ${symbol} — price spike anomaly, taking profit on existing position`
-          : `Sell signal on ${symbol} — price spike anomaly detected`;
+        if (holding) {
+          // Price spike with position → sell (take profit)
+          side = "sell";
+          qty = heldQty;
+          rationale = `Selling ${qty} shares of ${symbol} — price spike anomaly, taking profit`;
+        } else {
+          // Price spike without position → buy (momentum entry)
+          side = "buy";
+          qty = DEFAULT_QTY;
+          rationale = `Buy signal on ${symbol} — price spike anomaly, momentum entry`;
+        }
+        break;
+
+      case "price_drop":
+        if (holding) {
+          // Price drop with position → sell (stop loss)
+          side = "sell";
+          qty = heldQty;
+          rationale = `Selling ${qty} shares of ${symbol} — price drop anomaly, cutting losses`;
+        } else {
+          // Price drop without position → buy (mean reversion / buy the dip)
+          side = "buy";
+          qty = DEFAULT_QTY;
+          rationale = `Buy signal on ${symbol} — price drop anomaly, mean reversion entry`;
+        }
+        break;
+
+      case "volume_spike":
+        if (holding) {
+          this.log.debug("Skipped anomaly", { reason: "already holding for volume_spike signal" });
+          return null;
+        }
+        side = "buy";
+        qty = DEFAULT_QTY;
+        rationale = `Buy signal on ${symbol} — volume spike may indicate institutional interest`;
         break;
 
       case "volume_drop":
-        // Volume drop → buy (accumulation signal)
         if (holding) {
-          this.log.debug("Skipped anomaly", { reason: "already holding position for volume_drop signal" });
+          this.log.debug("Skipped anomaly", { reason: "already holding for volume_drop signal" });
           return null;
         }
         side = "buy";
@@ -95,10 +143,17 @@ export class TradeGenerator {
 
       case "unknown":
       default:
-        // Unknown anomaly type on high/critical → default to sell (defensive)
-        side = "sell";
-        qty = holding ? heldQty : DEFAULT_QTY;
-        rationale = `Sell signal on ${symbol} — ${anomaly.severity} anomaly detected: ${anomaly.description}`;
+        if (holding) {
+          // Unknown high/critical with position → sell (defensive)
+          side = "sell";
+          qty = heldQty;
+          rationale = `Sell signal on ${symbol} — ${anomaly.severity} anomaly: ${anomaly.description}`;
+        } else {
+          // Unknown high/critical without position → buy (anomaly-driven entry)
+          side = "buy";
+          qty = DEFAULT_QTY;
+          rationale = `Buy signal on ${symbol} — ${anomaly.severity} anomaly detected: ${anomaly.description}`;
+        }
         break;
     }
 

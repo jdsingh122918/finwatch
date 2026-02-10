@@ -36,16 +36,14 @@ export function createPriceChart(container: HTMLElement): ChartContext {
     },
   });
 
-  const lineSeries = chart.addSeries({
-    type: "Line",
+  const lineSeries = chart.addLineSeries({
     color: "#00ff88",
     lineWidth: 2,
     priceLineVisible: true,
     lastValueVisible: true,
   });
 
-  const volumeSeries = chart.addSeries({
-    type: "Histogram",
+  const volumeSeries = chart.addHistogramSeries({
     color: "rgba(0, 255, 136, 0.15)",
     priceFormat: { type: "volume" },
     priceScaleId: "",

@@ -32,7 +32,7 @@ function parseTimeFilter(value: string): number {
   const units: Record<string, number> = { m: 60_000, h: 3600_000 };
   const match = value.match(/^(\d+)([mh])$/);
   if (!match) return 0;
-  return Number(match[1]) * (units[match[2]] ?? 0);
+  return Number(match[1]) * (units[match[2]!] ?? 0);
 }
 
 export function AnomalyFeed({ anomalies, feedbackMap, onFeedback }: Props) {

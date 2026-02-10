@@ -31,6 +31,11 @@ function buildSystemPrompt(ctx: AnalysisContext): string {
     `- symbol: the ticker symbol (if applicable)`,
     `- description: a brief explanation of the anomaly`,
     `- metrics: an object of relevant metric values`,
+    `- preScreenScore: a confidence score from 0.0 to 1.0 indicating how confident you are this is a real anomaly`,
+    ``,
+    `Focus on unusual price movements, volume spikes, and significant deviations from recent history.`,
+    `A z-score above 2.0 or below -2.0 indicates a statistically significant deviation.`,
+    `Look for: large daily moves (>3%), volume >2x average, gap opens, trend reversals.`,
     ``,
     `If no anomalies are detected, output an empty JSON array: []`,
     ``,
@@ -58,20 +63,22 @@ function buildSystemPrompt(ctx: AnalysisContext): string {
   return parts.join("\n");
 }
 
-function formatTick(scored: ScoredTick): string {
+function formatTick(scored: ScoredTick, isLatest = false): string {
   const { tick, zScores, score, classification, regime } = scored;
   const lines: string[] = [];
 
+  const dateStr = new Date(tick.timestamp).toISOString().slice(0, 10);
   const regimeStr = regime && regime !== "unknown" ? ` regime=${regime}` : "";
+  const latestTag = isLatest ? " ** LATEST **" : "";
   lines.push(
-    `[${classification.toUpperCase()}] score=${score} symbol=${tick.symbol ?? "N/A"} source=${tick.sourceId} ts=${tick.timestamp}${regimeStr}`
+    `[${classification.toUpperCase()}] score=${score.toFixed(3)} symbol=${tick.symbol ?? "N/A"} date=${dateStr} source=${tick.sourceId}${regimeStr}${latestTag}`
   );
 
   const metricParts: string[] = [];
   for (const [key, val] of Object.entries(tick.metrics)) {
     const z = zScores[key];
     metricParts.push(
-      z !== undefined ? `${key}=${val} (z=${z})` : `${key}=${val}`
+      z !== undefined ? `${key}=${val} (z=${z.toFixed(2)})` : `${key}=${val}`
     );
   }
   lines.push(`  metrics: ${metricParts.join(", ")}`);
@@ -88,9 +95,24 @@ export function buildAnalysisPrompt(
   let userContent: string;
   if (ticks.length === 0) {
     userContent = `This batch contains no ticks to analyze. Return an empty JSON array.`;
+  } else if (ticks.length === 1) {
+    userContent = `Analyze the following data tick for anomalies:\n\n${formatTick(ticks[0]!, true)}`;
   } else {
-    const tickLines = ticks.map(formatTick).join("\n\n");
-    userContent = `Analyze the following ${ticks.length} data tick(s) for anomalies:\n\n${tickLines}`;
+    // Mark the latest tick (highest timestamp) — this is the "current" data point.
+    // Earlier ticks provide historical context for z-score comparison.
+    const contextTicks = ticks.slice(0, -1);
+    const latestTick = ticks[ticks.length - 1]!;
+    const contextLines = contextTicks.map(t => formatTick(t, false)).join("\n\n");
+    const latestLine = formatTick(latestTick, true);
+    userContent = [
+      `Analyze the LATEST tick below for anomalies, using the ${contextTicks.length} prior ticks as historical context:`,
+      ``,
+      `--- HISTORICAL CONTEXT (${contextTicks.length} prior bars) ---`,
+      contextLines,
+      ``,
+      `--- CURRENT BAR (analyze this for anomalies) ---`,
+      latestLine,
+    ].join("\n");
   }
 
   return {
