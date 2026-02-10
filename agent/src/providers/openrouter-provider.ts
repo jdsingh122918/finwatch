@@ -17,9 +17,9 @@ export type OpenRouterProviderOptions = {
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const SUPPORTED_MODELS = [
-  "anthropic/claude-opus-4-5-20251101",
-  "anthropic/claude-sonnet-4-5-20241022",
-  "anthropic/claude-3-5-haiku-20241022",
+  "anthropic/claude-opus-4-5-20250929",
+  "anthropic/claude-sonnet-4-5-20250929",
+  "anthropic/claude-haiku-4-5-20251001",
   "google/gemini-2.5-pro",
   "openai/gpt-4o",
 ];
@@ -74,6 +74,10 @@ export class OpenRouterProvider implements LLMProvider {
       }));
     }
 
+    if (params.responseFormat) {
+      body.response_format = { type: params.responseFormat.type };
+    }
+
     const response = await fetch(this.baseUrl, {
       method: "POST",
       headers: {
@@ -96,6 +100,9 @@ export class OpenRouterProvider implements LLMProvider {
     const decoder = new TextDecoder();
     let buffer = "";
 
+    // Tool call accumulation
+    const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -114,7 +121,15 @@ export class OpenRouterProvider implements LLMProvider {
         try {
           const parsed = JSON.parse(data) as {
             choices?: Array<{
-              delta?: { content?: string };
+              delta?: {
+                content?: string;
+                tool_calls?: Array<{
+                  index: number;
+                  id?: string;
+                  type?: string;
+                  function?: { name?: string; arguments?: string };
+                }>;
+              };
               finish_reason?: string | null;
             }>;
             usage?: { prompt_tokens?: number; completion_tokens?: number };
@@ -127,7 +142,44 @@ export class OpenRouterProvider implements LLMProvider {
             yield { type: "text_delta", text: choice.delta.content };
           }
 
+          // Accumulate tool call deltas
+          if (choice.delta?.tool_calls) {
+            for (const tc of choice.delta.tool_calls) {
+              const existing = toolCalls.get(tc.index);
+              if (existing) {
+                if (tc.function?.arguments) {
+                  existing.arguments += tc.function.arguments;
+                }
+              } else {
+                toolCalls.set(tc.index, {
+                  id: tc.id ?? "",
+                  name: tc.function?.name ?? "",
+                  arguments: tc.function?.arguments ?? "",
+                });
+              }
+            }
+          }
+
           if (choice.finish_reason) {
+            // Emit accumulated tool calls before usage/stop
+            if (choice.finish_reason === "tool_calls") {
+              for (const [, tc] of toolCalls) {
+                let parsedInput: Record<string, unknown> = {};
+                try {
+                  parsedInput = JSON.parse(tc.arguments) as Record<string, unknown>;
+                } catch {
+                  // If JSON parse fails, pass empty object
+                }
+                yield {
+                  type: "tool_use" as const,
+                  id: tc.id,
+                  name: tc.name,
+                  input: parsedInput,
+                };
+              }
+              toolCalls.clear();
+            }
+
             if (parsed.usage) {
               yield {
                 type: "usage",
@@ -156,7 +208,7 @@ export class OpenRouterProvider implements LLMProvider {
           "X-Title": this.title,
         },
         body: JSON.stringify({
-          model: "anthropic/claude-3-5-haiku-20241022",
+          model: "anthropic/claude-haiku-4-5-20251001",
           max_tokens: 1,
           stream: true,
           messages: [{ role: "user", content: "." }],

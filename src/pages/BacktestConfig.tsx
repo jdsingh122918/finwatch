@@ -26,7 +26,7 @@ export function BacktestConfigPage({ progress, onProgress, onComplete, runs, onV
   const [preScreenerSensitivity, setPreScreenerSensitivity] = useState(0.5);
   const [severityThreshold, setSeverityThreshold] = useState<"low" | "medium" | "high" | "critical">("high");
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
-  const [modelId, setModelId] = useState("claude-3-5-haiku-20241022");
+  const [modelId, setModelId] = useState("claude-haiku-4-5-20251001");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentIdRef = useRef<string | null>(null);

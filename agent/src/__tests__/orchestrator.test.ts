@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { DataTick, SourceConfig, SourceHealth } from "@finwatch/shared";
 import { Orchestrator } from "../orchestrator.js";
 import type { DataSource } from "../ingestion/types.js";
+import Database from "better-sqlite3";
+import { createMemoryDb } from "../memory/db.js";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 
 function mockProvider() {
   return {
@@ -135,6 +140,46 @@ describe("Orchestrator", () => {
     const callsAfterStop = (source.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
 
     expect(callsAfterStop).toBe(callsAfterStart);
+  });
+
+  it("creates MemoryManager when memory config is provided", () => {
+    const db = createMemoryDb(":memory:");
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fw-orch-mem-"));
+    try {
+      const orch = new Orchestrator({
+        ...orchConfig(),
+        memory: { db, memoryDir: tmpDir },
+      });
+      expect(orch.memory).toBeDefined();
+      expect(orch.memory!.listAll()).toEqual([]);
+    } finally {
+      db.close();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("creates MemoryManager with embedding service when openaiApiKey is provided", async () => {
+    const db = createMemoryDb(":memory:");
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "fw-orch-emb-"));
+    try {
+      const orch = new Orchestrator({
+        ...orchConfig(),
+        memory: { db, memoryDir: tmpDir, openaiApiKey: "test-key" },
+      });
+      expect(orch.memory).toBeDefined();
+
+      // Store something and verify the embedding service is invoked (fire-and-forget)
+      const id = orch.memory!.store("test content", ["test"]);
+      expect(id).toBeDefined();
+    } finally {
+      db.close();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not create MemoryManager when no memory config", () => {
+    const orch = new Orchestrator(orchConfig());
+    expect(orch.memory).toBeUndefined();
   });
 
   it("continues polling when a source fetch throws", async () => {

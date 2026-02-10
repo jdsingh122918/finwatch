@@ -67,7 +67,7 @@ describe("OpenRouterProvider", () => {
 
     const provider = new OpenRouterProvider({ apiKey: "test-key" });
     const params: CreateMessageParams = {
-      model: "anthropic/claude-sonnet-4-5-20241022",
+      model: "anthropic/claude-sonnet-4-5-20250929",
       messages: [{ role: "user", content: "Hi" }],
       maxTokens: 1024,
     };
@@ -103,7 +103,7 @@ describe("OpenRouterProvider", () => {
       title: "FinWatch Agent",
     });
     const params: CreateMessageParams = {
-      model: "anthropic/claude-sonnet-4-5-20241022",
+      model: "anthropic/claude-sonnet-4-5-20250929",
       messages: [{ role: "user", content: "test" }],
       maxTokens: 512,
     };
@@ -141,7 +141,7 @@ describe("OpenRouterProvider", () => {
 
     const provider = new OpenRouterProvider({ apiKey: "test-key" });
     const params: CreateMessageParams = {
-      model: "anthropic/claude-opus-4-5-20251101",
+      model: "anthropic/claude-opus-4-5-20250929",
       system: "Be concise.",
       messages: [{ role: "user", content: "Summarize" }],
       maxTokens: 4096,
@@ -162,7 +162,7 @@ describe("OpenRouterProvider", () => {
     const callArgs = mockFetch.mock.calls[0]!;
     const body = JSON.parse(callArgs[1].body as string);
 
-    expect(body.model).toBe("anthropic/claude-opus-4-5-20251101");
+    expect(body.model).toBe("anthropic/claude-opus-4-5-20250929");
     expect(body.max_tokens).toBe(4096);
     expect(body.temperature).toBe(0.7);
     expect(body.stream).toBe(true);
@@ -191,7 +191,7 @@ describe("OpenRouterProvider", () => {
 
     const provider = new OpenRouterProvider({ apiKey: "test-key" });
     const params: CreateMessageParams = {
-      model: "anthropic/claude-sonnet-4-5-20241022",
+      model: "anthropic/claude-sonnet-4-5-20250929",
       messages: [{ role: "user", content: "Hi" }],
       maxTokens: 1024,
     };
@@ -237,6 +237,196 @@ describe("OpenRouterProvider", () => {
     const provider = new OpenRouterProvider({ apiKey: "test-key" });
     const models = provider.listModels();
     expect(models.length).toBeGreaterThan(0);
-    expect(models).toContain("anthropic/claude-opus-4-5-20251101");
+    expect(models).toContain("anthropic/claude-opus-4-5-20250929");
+  });
+
+  describe("tool use streaming", () => {
+    it("yields tool_use event when finish_reason is tool_calls", async () => {
+      const sseBody = createSSEStream([
+        sseEvent({
+          choices: [{
+            delta: {
+              tool_calls: [{
+                index: 0,
+                id: "call_abc",
+                type: "function",
+                function: { name: "search_memory", arguments: "" },
+              }],
+            },
+            finish_reason: null,
+          }],
+        }),
+        sseEvent({
+          choices: [{
+            delta: {
+              tool_calls: [{
+                index: 0,
+                function: { arguments: '{"query":' },
+              }],
+            },
+            finish_reason: null,
+          }],
+        }),
+        sseEvent({
+          choices: [{
+            delta: {
+              tool_calls: [{
+                index: 0,
+                function: { arguments: '"test"}' },
+              }],
+            },
+            finish_reason: null,
+          }],
+        }),
+        sseEvent({
+          choices: [{ delta: {}, finish_reason: "tool_calls" }],
+          usage: { prompt_tokens: 50, completion_tokens: 20 },
+        }),
+        "data: [DONE]\n\n",
+      ]);
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: sseBody,
+      });
+
+      const provider = new OpenRouterProvider({ apiKey: "test-key" });
+      const params: CreateMessageParams = {
+        model: "anthropic/claude-sonnet-4-5-20250929",
+        messages: [{ role: "user", content: "Search" }],
+        maxTokens: 1024,
+        tools: [{
+          name: "search_memory",
+          description: "Search memory",
+          inputSchema: { type: "object", properties: { query: { type: "string" } } },
+        }],
+      };
+
+      const events: StreamEvent[] = [];
+      for await (const event of provider.createMessage(params)) {
+        events.push(event);
+      }
+
+      const toolEvent = events.find((e) => e.type === "tool_use");
+      expect(toolEvent).toEqual({
+        type: "tool_use",
+        id: "call_abc",
+        name: "search_memory",
+        input: { query: "test" },
+      });
+    });
+
+    it("handles text followed by tool call", async () => {
+      const sseBody = createSSEStream([
+        sseEvent({
+          choices: [{ delta: { content: "Searching..." }, finish_reason: null }],
+        }),
+        sseEvent({
+          choices: [{
+            delta: {
+              tool_calls: [{
+                index: 0,
+                id: "call_xyz",
+                type: "function",
+                function: { name: "get_historical_data", arguments: '{"symbol":"GOOG"}' },
+              }],
+            },
+            finish_reason: null,
+          }],
+        }),
+        sseEvent({
+          choices: [{ delta: {}, finish_reason: "tool_calls" }],
+          usage: { prompt_tokens: 30, completion_tokens: 10 },
+        }),
+        "data: [DONE]\n\n",
+      ]);
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: sseBody,
+      });
+
+      const provider = new OpenRouterProvider({ apiKey: "test-key" });
+      const params: CreateMessageParams = {
+        model: "anthropic/claude-sonnet-4-5-20250929",
+        messages: [{ role: "user", content: "Check GOOG" }],
+        maxTokens: 1024,
+      };
+
+      const events: StreamEvent[] = [];
+      for await (const event of provider.createMessage(params)) {
+        events.push(event);
+      }
+
+      expect(events[0]).toEqual({ type: "text_delta", text: "Searching..." });
+      const toolEvent = events.find((e) => e.type === "tool_use");
+      expect(toolEvent).toEqual({
+        type: "tool_use",
+        id: "call_xyz",
+        name: "get_historical_data",
+        input: { symbol: "GOOG" },
+      });
+    });
+  });
+
+  describe("structured JSON output", () => {
+    it("passes response_format to API when responseFormat is json_object", async () => {
+      const sseBody = createSSEStream([
+        sseEvent({ choices: [{ delta: {}, finish_reason: "stop" }] }),
+        "data: [DONE]\n\n",
+      ]);
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: sseBody,
+      });
+
+      const provider = new OpenRouterProvider({ apiKey: "test-key" });
+      const params: CreateMessageParams = {
+        model: "anthropic/claude-sonnet-4-5-20250929",
+        messages: [{ role: "user", content: "Analyze" }],
+        maxTokens: 1024,
+        responseFormat: { type: "json_object" },
+      };
+
+      for await (const _event of provider.createMessage(params)) {
+        // drain
+      }
+
+      const callArgs = mockFetch.mock.calls[0]!;
+      const body = JSON.parse(callArgs[1].body as string);
+      expect(body.response_format).toEqual({ type: "json_object" });
+    });
+
+    it("does not include response_format when responseFormat is not set", async () => {
+      const sseBody = createSSEStream([
+        sseEvent({ choices: [{ delta: {}, finish_reason: "stop" }] }),
+        "data: [DONE]\n\n",
+      ]);
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: sseBody,
+      });
+
+      const provider = new OpenRouterProvider({ apiKey: "test-key" });
+      const params: CreateMessageParams = {
+        model: "anthropic/claude-sonnet-4-5-20250929",
+        messages: [{ role: "user", content: "Analyze" }],
+        maxTokens: 1024,
+      };
+
+      for await (const _event of provider.createMessage(params)) {
+        // drain
+      }
+
+      const callArgs = mockFetch.mock.calls[0]!;
+      const body = JSON.parse(callArgs[1].body as string);
+      expect(body.response_format).toBeUndefined();
+    });
   });
 });

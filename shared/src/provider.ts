@@ -1,6 +1,7 @@
 export type StreamEvent =
   | { type: "text_delta"; text: string }
-  | { type: "usage"; input: number; output: number }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "usage"; input: number; output: number; cacheCreation?: number; cacheRead?: number }
   | { type: "stop"; reason: string };
 
 export type LLMMessage = {
@@ -8,13 +9,26 @@ export type LLMMessage = {
   content: string;
 };
 
+export type SystemBlock = {
+  type: "text";
+  text: string;
+  cache_control?: { type: "ephemeral" };
+};
+
+export type ResponseFormat = {
+  type: "json_object";
+  schema?: Record<string, unknown>;
+};
+
 export type CreateMessageParams = {
   model: string;
   system?: string;
+  systemBlocks?: SystemBlock[];
   messages: LLMMessage[];
   maxTokens: number;
   temperature?: number;
   tools?: ToolDefinition[];
+  responseFormat?: ResponseFormat;
 };
 
 export type ToolDefinition = {

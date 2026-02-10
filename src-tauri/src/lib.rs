@@ -1,5 +1,7 @@
 pub mod bridge;
+pub mod bridge_pending;
 pub mod commands;
+pub mod keychain;
 pub mod db;
 pub mod events;
 pub mod jsonrpc;
@@ -8,8 +10,27 @@ pub mod sidecar;
 pub mod types;
 pub mod watcher;
 
+use tracing_subscriber::EnvFilter;
+
+/// Initialize structured logging with tracing.
+/// Respects RUST_LOG env var; defaults to `info` level for finwatch crate.
+pub fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("finwatch=info"));
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true)
+        .with_thread_ids(false)
+        .with_file(false)
+        .with_line_number(false)
+        .init();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_tracing();
+
     // Load .env from project root (parent of src-tauri/)
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let project_root = manifest_dir.parent().unwrap_or(manifest_dir);
@@ -21,10 +42,15 @@ pub fn run() {
     db::init_db(&pool).expect("Failed to initialize database");
     migrations::run_pending(&pool).expect("Failed to run migrations");
 
+    // Migrate credentials from DB to OS keychain (idempotent, best-effort)
+    keychain::migrate_db_to_keychain(&pool, "paper").ok();
+    keychain::migrate_db_to_keychain(&pool, "live").ok();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(pool)
         .manage(bridge::SidecarBridge::new())
         .invoke_handler(tauri::generate_handler![

@@ -3,11 +3,23 @@ import type { MemoryEntry } from "@finwatch/shared";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { embeddingToBuffer } from "./vector-search.js";
+
+export type EmbeddingProvider = {
+  embed(text: string): Promise<number[]>;
+};
 
 export class SemanticStore {
   private db: Database.Database;
   private memoryDir: string;
-  constructor(db: Database.Database, memoryDir: string) { this.db = db; this.memoryDir = memoryDir; fs.mkdirSync(memoryDir, { recursive: true }); }
+  private embeddingService?: EmbeddingProvider;
+
+  constructor(db: Database.Database, memoryDir: string, embeddingService?: EmbeddingProvider) {
+    this.db = db;
+    this.memoryDir = memoryDir;
+    this.embeddingService = embeddingService;
+    fs.mkdirSync(memoryDir, { recursive: true });
+  }
 
   flush(summary: string, tags: string[]): string {
     const id = crypto.randomUUID();
@@ -16,7 +28,21 @@ export class SemanticStore {
     fs.writeFileSync(path.join(this.memoryDir, filename), `# Memory: ${dateStr}\n\nTags: ${tags.join(", ")}\n\n${summary}\n`, "utf-8");
     this.db.prepare("INSERT INTO entries (id,content,embedding,source,timestamp,tags) VALUES (?,?,NULL,?,?,?)")
       .run(id, summary, `file:${filename}`, Date.now(), JSON.stringify(tags));
+
+    // Fire-and-forget embedding generation
+    if (this.embeddingService) {
+      this.generateAndStoreEmbedding(id, summary).catch(() => {
+        // Silently ignore embedding failures -- entry is still stored with NULL embedding
+      });
+    }
+
     return id;
+  }
+
+  private async generateAndStoreEmbedding(id: string, text: string): Promise<void> {
+    const embedding = await this.embeddingService!.embed(text);
+    const buf = embeddingToBuffer(embedding);
+    this.db.prepare("UPDATE entries SET embedding = ? WHERE id = ?").run(buf, id);
   }
 
   listAll(): MemoryEntry[] {

@@ -2,6 +2,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
+import { ToastProvider } from "./components/Toast";
 import { useAgentEvents } from "./hooks/use-agent-events";
 import { Dashboard } from "./pages/Dashboard";
 import { AnomalyFeed } from "./pages/AnomalyFeed";
@@ -11,6 +12,7 @@ import { Settings } from "./pages/Settings";
 import { Watchlist } from "./pages/Watchlist";
 import { BacktestConfigPage } from "./pages/BacktestConfig";
 import { BacktestResults } from "./pages/BacktestResults";
+import { TradingHub } from "./pages/TradingHub";
 import { createDataSlice } from "./store/data-slice";
 import { createAnomalySlice } from "./store/anomaly-slice";
 import { createAgentSlice } from "./store/agent-slice";
@@ -19,7 +21,7 @@ import { createBacktestSlice } from "./store/backtest-slice";
 import { createWatchlistSlice } from "./store/watchlist-slice";
 import type { SourceHealth as SH } from "@finwatch/shared";
 
-const tabs = ["Dashboard", "Watchlist", "Anomalies", "Agent", "Sources", "Backtest", "Settings"] as const;
+const tabs = ["Dashboard", "Watchlist", "Anomalies", "Agent", "Sources", "Trading", "Backtest", "Settings"] as const;
 type Tab = (typeof tabs)[number];
 
 const dataStore = createDataSlice();
@@ -109,6 +111,9 @@ export default function App() {
     setSources: (s: Record<string, SH>) => {
       sourcesStore.setState({ ...sourceState.sources, ...s });
     },
+    addSuggestion: (s: import("@finwatch/shared").TradeSuggestion) => tradingStore.getState().addSuggestion(s),
+    addHistoryEntry: (e: import("@finwatch/shared").TradeAuditEntry) => tradingStore.getState().addHistoryEntry(e),
+    setPositions: (p: import("@finwatch/shared").PortfolioPosition[]) => tradingStore.getState().setPositions(p),
   }), [sourceState.sources]);
 
   useAgentEvents(eventStores);
@@ -116,6 +121,7 @@ export default function App() {
   const uniqueSymbols = new Set(dataState.ticks.map((t) => t.symbol).filter(Boolean));
 
   return (
+    <ToastProvider>
     <div className="h-screen bg-bg-primary text-text-primary font-mono text-sm">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
@@ -149,6 +155,28 @@ export default function App() {
           <AgentLog status={agentState.status} log={agentState.activityLog} />
         )}
         {activeTab === "Sources" && <SourceHealth sources={sourceState.sources} />}
+        {activeTab === "Trading" && (
+          <TradingHub
+            mode={tradingState.mode}
+            killSwitchActive={tradingState.killSwitchActive}
+            suggestions={tradingState.suggestions}
+            positions={tradingState.positions}
+            history={tradingState.history}
+            onApprove={(id) => {
+              tradingStore.getState().updateSuggestionStatus(id, "approved");
+              invoke("trading_approve", { suggestionId: id });
+            }}
+            onDismiss={(id) => {
+              tradingStore.getState().updateSuggestionStatus(id, "dismissed");
+              invoke("trading_dismiss", { suggestionId: id });
+            }}
+            onKillSwitch={() => {
+              const next = !tradingState.killSwitchActive;
+              tradingStore.getState().setKillSwitch(next);
+              invoke("trading_kill_switch", { active: next });
+            }}
+          />
+        )}
         {activeTab === "Backtest" && (() => {
           const selectedRun = backtestState.activeRunId
             ? backtestState.runs.find((r) => r.id === backtestState.activeRunId)
@@ -211,5 +239,6 @@ export default function App() {
         killSwitchActive={tradingState.killSwitchActive}
       />
     </div>
+    </ToastProvider>
   );
 }

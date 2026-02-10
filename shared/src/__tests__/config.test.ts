@@ -6,9 +6,9 @@ const validConfig = {
     { id: "anthropic", type: "anthropic" as const, apiKeyEnv: "ANTHROPIC_API_KEY" },
   ],
   model: {
-    analysis: { provider: "anthropic", model: "claude-opus-4-5-20251101" },
-    subagent: { provider: "anthropic", model: "claude-sonnet-4-5-20241022" },
-    improvement: { provider: "anthropic", model: "claude-opus-4-5-20251101" },
+    analysis: { provider: "anthropic", model: "claude-opus-4-5-20250929" },
+    subagent: { provider: "anthropic", model: "claude-sonnet-4-5-20250929" },
+    improvement: { provider: "anthropic", model: "claude-opus-4-5-20250929" },
     fallbacks: [],
     temperature: 0.3,
     maxTokens: 8192,

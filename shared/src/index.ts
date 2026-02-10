@@ -39,6 +39,8 @@ export type {
 export type {
   StreamEvent,
   LLMMessage,
+  SystemBlock,
+  ResponseFormat,
   CreateMessageParams,
   ToolDefinition,
   LLMProvider,

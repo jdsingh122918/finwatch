@@ -19,6 +19,7 @@ export type MonitorLoopDeps = {
   preScreenConfig: PreScreenConfig;
   patterns: DomainPattern[];
   thresholds: DomainThreshold[];
+  memoryContext?: (tickSummary: string) => string;
 };
 
 export class MonitorLoop {
@@ -114,6 +115,7 @@ export class MonitorLoop {
       sessionId: this._currentSessionId!,
       patterns: this.deps.patterns,
       thresholds: this.deps.thresholds,
+      memoryContext: this.deps.memoryContext,
     });
 
     this._currentCycleId = runner.state.cycleId;

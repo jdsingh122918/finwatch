@@ -26,7 +26,7 @@ describe("BacktestConfig schema", () => {
     confidenceThreshold: 0.7,
     preScreenerSensitivity: 0.5,
     tradeSizingStrategy: "pct_of_capital" as const,
-    modelId: "claude-3-5-haiku-20241022",
+    modelId: "claude-haiku-4-5-20251001",
   };
 
   it("validates a valid config", () => {

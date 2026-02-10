@@ -10,6 +10,7 @@ describe("App shell", () => {
     expect(screen.getByTitle("Anomalies")).toBeTruthy();
     expect(screen.getByTitle("Agent")).toBeTruthy();
     expect(screen.getByTitle("Sources")).toBeTruthy();
+    expect(screen.getByTitle("Trading")).toBeTruthy();
     expect(screen.getByTitle("Backtest")).toBeTruthy();
     expect(screen.getByTitle("Settings")).toBeTruthy();
   });

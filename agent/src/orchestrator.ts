@@ -1,9 +1,12 @@
 import { EventEmitter } from "node:events";
+import type Database from "better-sqlite3";
 import type { DataTick, Anomaly, AgentActivity, AgentStatus, LLMProvider } from "@finwatch/shared";
 import { DataBuffer } from "./ingestion/data-buffer.js";
 import { SourceRegistry } from "./ingestion/source-registry.js";
 import { MonitorLoop } from "./analysis/monitor-loop.js";
 import { withFallback } from "./providers/fallback.js";
+import { MemoryManager } from "./memory/memory-manager.js";
+import { OpenAIEmbeddingProvider } from "./memory/openai-embeddings.js";
 import { createLogger } from "./utils/logger.js";
 
 export type OrchestratorConfig = {
@@ -23,12 +26,18 @@ export type OrchestratorConfig = {
     flushIntervalMs: number;
     urgentThreshold: number;
   };
+  memory?: {
+    db: Database.Database;
+    memoryDir: string;
+    openaiApiKey?: string;
+  };
 };
 
 export class Orchestrator extends EventEmitter {
   private readonly registry: SourceRegistry;
   private readonly buffer: DataBuffer;
   private readonly monitor: MonitorLoop;
+  private readonly _memory?: MemoryManager;
   private running = false;
   private polling = false;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -43,6 +52,14 @@ export class Orchestrator extends EventEmitter {
       urgentThreshold: config.buffer.urgentThreshold,
     });
 
+    // Wire memory pipeline
+    if (config.memory) {
+      const embeddingService = config.memory.openaiApiKey
+        ? new OpenAIEmbeddingProvider(config.memory.openaiApiKey)
+        : undefined;
+      this._memory = new MemoryManager(config.memory.db, config.memory.memoryDir, embeddingService);
+    }
+
     const provider = config.llm.providers.length > 1
       ? withFallback(config.llm.providers)
       : config.llm.providers[0]!;
@@ -55,6 +72,9 @@ export class Orchestrator extends EventEmitter {
       preScreenConfig: { zScoreThreshold: 3.0, urgentThreshold: 0.6, skipThreshold: 0.2 },
       patterns: [],
       thresholds: [],
+      memoryContext: this._memory
+        ? (tickSummary: string) => this._memory!.buildContext(tickSummary)
+        : undefined,
     });
 
     this.monitor.onActivity = (a: AgentActivity) => this.emit("activity", a);
@@ -63,6 +83,10 @@ export class Orchestrator extends EventEmitter {
 
   get status(): AgentStatus {
     return this.monitor.status;
+  }
+
+  get memory(): MemoryManager | undefined {
+    return this._memory;
   }
 
   /** Inject a tick directly (for testing or manual sources). */
@@ -76,6 +100,15 @@ export class Orchestrator extends EventEmitter {
     this.running = true;
     const sources = this.registry.list();
     this.log.info("Starting orchestrator", { registeredSources: sources.length, sourceIds: sources.map(s => s.id) });
+
+    // Backfill any NULL embeddings at startup
+    if (this._memory) {
+      const backfilled = await this._memory.backfill();
+      if (backfilled > 0) {
+        this.log.info("Backfilled embeddings", { count: backfilled });
+      }
+    }
+
     await this.registry.startAll();
     this.log.info("All sources started, beginning poll loop");
     this.startSourcePolling();

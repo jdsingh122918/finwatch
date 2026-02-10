@@ -8,6 +8,22 @@ export class ParseError extends Error {
   }
 }
 
+export const ANOMALY_SCHEMA = {
+  type: "array",
+  items: {
+    type: "object",
+    required: ["severity", "source", "description", "metrics"],
+    properties: {
+      severity: { type: "string", enum: ["low", "medium", "high", "critical"] },
+      source: { type: "string" },
+      symbol: { type: "string" },
+      description: { type: "string" },
+      metrics: { type: "object", additionalProperties: { type: "number" } },
+      preScreenScore: { type: "number" },
+    },
+  },
+} as const;
+
 const VALID_SEVERITIES: Set<string> = new Set([
   "low",
   "medium",
@@ -68,6 +84,42 @@ export function parseAnomalies(text: string, sessionId: string): Anomaly[] {
 
   if (!Array.isArray(parsed)) {
     throw new ParseError("Expected JSON array, got: " + typeof parsed);
+  }
+
+  const anomalies: Anomaly[] = [];
+
+  for (const entry of parsed as RawAnomaly[]) {
+    if (!isValidEntry(entry)) continue;
+
+    anomalies.push({
+      id: crypto.randomUUID(),
+      severity: entry.severity as Severity,
+      source: entry.source as string,
+      symbol: typeof entry.symbol === "string" ? entry.symbol : undefined,
+      timestamp: Date.now(),
+      description: entry.description as string,
+      metrics: entry.metrics as Record<string, number>,
+      preScreenScore:
+        typeof entry.preScreenScore === "number" ? entry.preScreenScore : 0,
+      sessionId,
+    });
+  }
+
+  return anomalies;
+}
+
+export function parseAnomaliesStrict(text: string, sessionId: string): Anomaly[] {
+  const trimmed = text.trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    throw new ParseError(`Strict mode: response is not valid JSON: ${trimmed.slice(0, 100)}`);
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new ParseError("Strict mode: expected JSON array, got: " + typeof parsed);
   }
 
   const anomalies: Anomaly[] = [];

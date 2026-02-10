@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Sidebar } from "../Sidebar.js";
 
-const tabs = ["Dashboard", "Watchlist", "Anomalies", "Agent", "Sources", "Backtest", "Settings"] as const;
+const tabs = ["Dashboard", "Watchlist", "Anomalies", "Agent", "Sources", "Trading", "Backtest", "Settings"] as const;
 
 describe("Sidebar", () => {
   it("renders all navigation items", () => {

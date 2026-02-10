@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAnomalies, ParseError } from "../response-parser.js";
+import { parseAnomalies, parseAnomaliesStrict, ParseError, ANOMALY_SCHEMA } from "../response-parser.js";
 
 describe("parseAnomalies", () => {
   const sessionId = "session-123";
@@ -123,6 +123,50 @@ This indicates overbought conditions.`;
 ]
 \`\`\``;
     const result = parseAnomalies(text, sessionId);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.description).toBe("Valid");
+  });
+});
+
+describe("ANOMALY_SCHEMA", () => {
+  it("exports a valid JSON schema object", () => {
+    expect(ANOMALY_SCHEMA).toBeDefined();
+    expect(ANOMALY_SCHEMA.type).toBe("array");
+    expect(ANOMALY_SCHEMA.items).toBeDefined();
+    expect(ANOMALY_SCHEMA.items.type).toBe("object");
+    expect(ANOMALY_SCHEMA.items.required).toContain("severity");
+    expect(ANOMALY_SCHEMA.items.required).toContain("source");
+    expect(ANOMALY_SCHEMA.items.required).toContain("description");
+    expect(ANOMALY_SCHEMA.items.required).toContain("metrics");
+  });
+});
+
+describe("parseAnomaliesStrict", () => {
+  const sessionId = "session-strict";
+
+  it("parses raw JSON without needing code fences", () => {
+    const text = `[{ "severity": "high", "source": "yahoo", "symbol": "AAPL", "description": "Spike", "metrics": { "volume": 100 } }]`;
+    const result = parseAnomaliesStrict(text, sessionId);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.severity).toBe("high");
+  });
+
+  it("throws ParseError for text that is not pure JSON", () => {
+    const text = `Here is the analysis:\n[{ "severity": "high", "source": "yahoo", "description": "Test", "metrics": {} }]`;
+    expect(() => parseAnomaliesStrict(text, sessionId)).toThrow(ParseError);
+  });
+
+  it("throws ParseError for JSON that is not an array", () => {
+    const text = `{ "severity": "high" }`;
+    expect(() => parseAnomaliesStrict(text, sessionId)).toThrow(ParseError);
+  });
+
+  it("still validates entries and skips invalid ones", () => {
+    const text = `[
+      { "severity": "high", "source": "yahoo", "description": "Valid", "metrics": {} },
+      { "severity": "invalid", "source": "yahoo", "description": "Bad", "metrics": {} }
+    ]`;
+    const result = parseAnomaliesStrict(text, sessionId);
     expect(result).toHaveLength(1);
     expect(result[0]!.description).toBe("Valid");
   });

@@ -7,6 +7,7 @@ pub enum AgentState {
     Running,
     Paused,
     Error,
+    Unhealthy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

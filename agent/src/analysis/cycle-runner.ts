@@ -7,10 +7,14 @@ import type {
   DomainPattern,
   DomainThreshold,
   StreamEvent,
+  ResponseFormat,
+  ToolDefinition,
 } from "@finwatch/shared";
 import { preScreenBatch, type PreScreenConfig } from "./pre-screener.js";
 import { buildAnalysisPrompt } from "./prompt-builder.js";
 import { parseAnomalies } from "./response-parser.js";
+import type { ToolRegistry } from "../tools/tool-registry.js";
+import { ToolExecutor, type ToolResult } from "../tools/tool-executor.js";
 
 export type CycleRunnerDeps = {
   provider: LLMProvider;
@@ -21,12 +25,15 @@ export type CycleRunnerDeps = {
   sessionId: string;
   patterns: DomainPattern[];
   thresholds: DomainThreshold[];
+  toolRegistry?: ToolRegistry;
+  memoryContext?: (tickSummary: string) => string;
 };
 
 export type CycleResult = {
   anomalies: Anomaly[];
   tickCount: number;
   state: CycleState;
+  toolResults?: ToolResult[];
 };
 
 export class CycleRunner {
@@ -67,15 +74,31 @@ export class CycleRunner {
     const scored = preScreenBatch(ticks, this.deps.preScreenConfig);
 
     // Build prompt
-    const { system, messages } = buildAnalysisPrompt(scored, {
+    const { system, messages, responseFormat } = buildAnalysisPrompt(scored, {
       sessionId: this.deps.sessionId,
       cycleId: this._state.cycleId,
       patterns: this.deps.patterns,
       thresholds: this.deps.thresholds,
     });
 
+    // Inject memory context if available
+    let enrichedSystem = system;
+    if (this.deps.memoryContext) {
+      const tickSummary = ticks.map(t => `${t.symbol ?? t.sourceId}`).join(", ");
+      const context = this.deps.memoryContext(tickSummary);
+      enrichedSystem = `${system}\n\n${context}`;
+    }
+
     // Call LLM
-    const responseText = await this.callProvider(system, messages);
+    const tools = this.deps.toolRegistry?.getToolDefinitions();
+    const { text: responseText, events } = await this.callProvider(enrichedSystem, messages, responseFormat, tools);
+
+    // Execute tools if registry is available
+    let toolResults: ToolResult[] | undefined;
+    if (this.deps.toolRegistry) {
+      const executor = new ToolExecutor(this.deps.toolRegistry);
+      toolResults = await executor.processEvents(events);
+    }
 
     // Parse anomalies
     const anomalies = parseAnomalies(responseText, this.deps.sessionId);
@@ -93,13 +116,16 @@ export class CycleRunner {
       anomalies,
       tickCount: ticks.length,
       state: this.state,
+      toolResults,
     };
   }
 
   private async callProvider(
     system: string,
     messages: { role: "user" | "assistant"; content: string }[],
-  ): Promise<string> {
+    responseFormat?: ResponseFormat,
+    tools?: ToolDefinition[],
+  ): Promise<{ text: string; events: StreamEvent[] }> {
     const events: StreamEvent[] = [];
 
     for await (const event of this.deps.provider.createMessage({
@@ -108,6 +134,8 @@ export class CycleRunner {
       messages,
       maxTokens: this.deps.maxTokens,
       temperature: this.deps.temperature,
+      responseFormat,
+      tools,
     })) {
       events.push(event);
     }
@@ -119,6 +147,6 @@ export class CycleRunner {
       }
     }
 
-    return text;
+    return { text, events };
   }
 }

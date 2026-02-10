@@ -1,3 +1,5 @@
+use tracing::warn;
+
 use crate::bridge::SidecarBridge;
 use crate::commands::agent::config_or_env;
 use crate::db::DbPool;
@@ -106,12 +108,12 @@ pub fn backtest_list_db(pool: &DbPool) -> Result<Vec<BacktestSummary>, String> {
                 id: row.get(0)?,
                 status: row.get(1)?,
                 config: serde_json::from_str(&config_str).unwrap_or_else(|e| {
-                    eprintln!("Warning: failed to parse backtest config JSON: {}", e);
+                    warn!(error = %e, "Failed to parse backtest config JSON");
                     serde_json::Value::Null
                 }),
                 metrics: metrics_str.map(|s| {
                     serde_json::from_str(&s).unwrap_or_else(|e| {
-                        eprintln!("Warning: failed to parse backtest metrics JSON: {}", e);
+                        warn!(error = %e, "Failed to parse backtest metrics JSON");
                         serde_json::Value::Null
                     })
                 }),
@@ -147,12 +149,12 @@ pub fn backtest_get_db(pool: &DbPool, id: &str) -> Result<BacktestSummary, Strin
             id: row.get(0)?,
             status: row.get(1)?,
             config: serde_json::from_str(&config_str).unwrap_or_else(|e| {
-                eprintln!("Warning: failed to parse backtest config JSON for id '{}': {}", id, e);
+                warn!(backtest_id = id, error = %e, "Failed to parse backtest config JSON");
                 serde_json::Value::Null
             }),
             metrics: metrics_str.map(|s| {
                 serde_json::from_str(&s).unwrap_or_else(|e| {
-                    eprintln!("Warning: failed to parse backtest metrics JSON for id '{}': {}", id, e);
+                    warn!(backtest_id = id, error = %e, "Failed to parse backtest metrics JSON");
                     serde_json::Value::Null
                 })
             }),
@@ -252,7 +254,7 @@ pub async fn backtest_start(
     let model = app_config
         .get("model")
         .and_then(|m| m.as_str())
-        .unwrap_or("claude-3-5-haiku-20241022");
+        .unwrap_or("claude-haiku-4-5-20251001");
 
     // Auto-spawn sidecar if not running
     if !bridge.is_running() {
@@ -335,7 +337,7 @@ pub fn backtest_cancel(
 
     // Best-effort: notify the agent to cancel the running backtest
     if bridge.is_running() {
-        let _ = bridge.send_request("backtest:cancel", Some(serde_json::json!({ "backtestId": backtest_id })));
+        let _ = bridge.send_notification("backtest:cancel", Some(serde_json::json!({ "backtestId": backtest_id })));
     }
 
     Ok(())

@@ -76,7 +76,7 @@ const VALID_BACKTEST_CONFIG = {
   confidenceThreshold: 0.5,
   preScreenerSensitivity: 0.3,
   tradeSizingStrategy: "fixed_qty" as const,
-  modelId: "claude-3-5-haiku-20241022",
+  modelId: "claude-haiku-4-5-20251001",
 };
 
 const BACKTEST_PARAMS = {
@@ -84,7 +84,7 @@ const BACKTEST_PARAMS = {
   alpaca: { keyId: "PKTEST", secretKey: "SECRET" },
   llm: {
     anthropicApiKey: "sk-ant-test",
-    model: "claude-3-5-haiku-20241022",
+    model: "claude-haiku-4-5-20251001",
     maxTokens: 4096,
     temperature: 0.3,
   },
@@ -146,7 +146,7 @@ describe("backtest JSON-RPC commands", () => {
           config: VALID_BACKTEST_CONFIG,
           alpaca: { keyId: "PKTEST", secretKey: "SECRET" },
           llm: {
-            model: "claude-3-5-haiku-20241022",
+            model: "claude-haiku-4-5-20251001",
             maxTokens: 4096,
             temperature: 0.3,
           },

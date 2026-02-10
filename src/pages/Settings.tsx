@@ -1,5 +1,11 @@
 import { useState } from "react";
 import { SymbolChips } from "../components/SymbolChips.js";
+import { useToast } from "../components/Toast.js";
+import {
+  getNotificationPreferences,
+  setNotificationPreferences,
+  type SeverityThreshold,
+} from "../utils/notifications.js";
 
 type Props = {
   onCredentialsSave: (keyId: string, secretKey: string) => void;
@@ -26,11 +32,13 @@ export function Settings({
   onNavigateWatchlist,
   onApplyChanges,
 }: Props) {
+  const toast = useToast();
   const [keyId, setKeyId] = useState("");
   const [secretKey, setSecretKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [openrouterKey, setOpenrouterKey] = useState("");
-  const [model, setModel] = useState("claude-3-5-haiku-20241022");
+  const [model, setModel] = useState("claude-haiku-4-5-20251001");
+  const [notifPrefs, setNotifPrefs] = useState(getNotificationPreferences);
 
   return (
     <div>
@@ -67,7 +75,10 @@ export function Settings({
             />
           </div>
           <button
-            onClick={() => onCredentialsSave(keyId, secretKey)}
+            onClick={() => {
+              onCredentialsSave(keyId, secretKey);
+              toast("Credentials saved");
+            }}
             className="px-3 py-1.5 text-xs border border-border rounded-sm text-accent hover:bg-bg-elevated cursor-pointer bg-transparent font-mono"
           >
             SAVE CREDENTIALS
@@ -142,17 +153,64 @@ export function Settings({
               onChange={(e) => setModel(e.target.value)}
               className="w-full bg-bg-primary text-text-primary text-xs p-2 rounded-sm border border-border outline-none font-mono focus:border-accent"
             >
-              <option value="claude-3-5-haiku-20241022">claude-haiku-3.5</option>
-              <option value="claude-sonnet-4-5-20241022">claude-sonnet-4.5</option>
-              <option value="claude-opus-4-5-20251101">claude-opus-4.5</option>
+              <option value="claude-haiku-4-5-20251001">claude-haiku-4.5</option>
+              <option value="claude-sonnet-4-5-20250929">claude-sonnet-4.5</option>
+              <option value="claude-opus-4-5-20250929">claude-opus-4.5</option>
             </select>
           </div>
           <button
-            onClick={() => onConfigSave({ anthropicApiKey: anthropicKey, openrouterApiKey: openrouterKey, model })}
+            onClick={() => {
+              onConfigSave({ anthropicApiKey: anthropicKey, openrouterApiKey: openrouterKey, model });
+              toast("Config saved");
+            }}
             className="px-3 py-1.5 text-xs border border-border rounded-sm text-accent hover:bg-bg-elevated cursor-pointer bg-transparent font-mono"
           >
             SAVE CONFIG
           </button>
+        </div>
+      </section>
+
+      {/* Notifications */}
+      <section className="mb-6">
+        <h3 className="text-accent text-xs uppercase tracking-widest mb-3">Notifications</h3>
+        <div className="bg-bg-surface border border-border rounded-sm p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <input
+              id="notif-enabled"
+              type="checkbox"
+              checked={notifPrefs.enabled}
+              onChange={(e) => {
+                const next = { ...notifPrefs, enabled: e.target.checked };
+                setNotifPrefs(next);
+                setNotificationPreferences(next);
+              }}
+              className="accent-accent"
+            />
+            <label htmlFor="notif-enabled" className="text-text-primary text-xs font-mono">
+              Enable Notifications
+            </label>
+          </div>
+          <div>
+            <label htmlFor="notif-threshold" className="block text-text-muted text-xs mb-1">
+              Severity Threshold
+            </label>
+            <select
+              id="notif-threshold"
+              value={notifPrefs.severityThreshold}
+              onChange={(e) => {
+                const next = { ...notifPrefs, severityThreshold: e.target.value as SeverityThreshold };
+                setNotifPrefs(next);
+                setNotificationPreferences(next);
+              }}
+              className="w-full bg-bg-primary text-text-primary text-xs p-2 rounded-sm border border-border outline-none font-mono focus:border-accent"
+            >
+              <option value="low">Low (all)</option>
+              <option value="medium">Medium+</option>
+              <option value="high">High+</option>
+              <option value="critical">Critical only</option>
+              <option value="none">Disabled</option>
+            </select>
+          </div>
         </div>
       </section>
 

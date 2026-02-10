@@ -2,6 +2,7 @@ import type {
   LLMMessage,
   DomainPattern,
   DomainThreshold,
+  ResponseFormat,
 } from "@finwatch/shared";
 import type { ScoredTick } from "./pre-screener.js";
 
@@ -15,6 +16,7 @@ export type AnalysisContext = {
 export type AnalysisPrompt = {
   system: string;
   messages: LLMMessage[];
+  responseFormat: ResponseFormat;
 };
 
 function buildSystemPrompt(ctx: AnalysisContext): string {
@@ -57,11 +59,12 @@ function buildSystemPrompt(ctx: AnalysisContext): string {
 }
 
 function formatTick(scored: ScoredTick): string {
-  const { tick, zScores, score, classification } = scored;
+  const { tick, zScores, score, classification, regime } = scored;
   const lines: string[] = [];
 
+  const regimeStr = regime && regime !== "unknown" ? ` regime=${regime}` : "";
   lines.push(
-    `[${classification.toUpperCase()}] score=${score} symbol=${tick.symbol ?? "N/A"} source=${tick.sourceId} ts=${tick.timestamp}`
+    `[${classification.toUpperCase()}] score=${score} symbol=${tick.symbol ?? "N/A"} source=${tick.sourceId} ts=${tick.timestamp}${regimeStr}`
   );
 
   const metricParts: string[] = [];
@@ -93,5 +96,6 @@ export function buildAnalysisPrompt(
   return {
     system,
     messages: [{ role: "user", content: userContent }],
+    responseFormat: { type: "json_object" },
   };
 }

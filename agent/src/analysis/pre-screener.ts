@@ -1,4 +1,5 @@
 import type { DataTick } from "@finwatch/shared";
+import type { Regime, Indicators } from "./regime-classifier.js";
 
 export type PreScreenConfig = {
   zScoreThreshold: number;
@@ -16,6 +17,8 @@ export type ScoredTick = {
   zScores: Record<string, number>;
   score: number;
   classification: "urgent" | "normal" | "skip";
+  regime?: Regime;
+  indicators?: Indicators;
 };
 
 export function computeZScores(ticks: DataTick[]): TickWithZScores[] {

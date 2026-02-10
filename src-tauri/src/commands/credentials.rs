@@ -85,6 +85,20 @@ fn validate_mode(mode: &str) -> Result<(), String> {
     }
 }
 
+/// Get credentials, trying keychain first, then falling back to DB.
+pub fn credentials_get_any(pool: &DbPool, mode: &str) -> Result<Option<AlpacaCredentials>, String> {
+    // Try keychain first
+    match crate::keychain::keychain_get(mode) {
+        Ok(Some(creds)) => return Ok(Some(creds)),
+        Ok(None) => {}
+        Err(e) => {
+            tracing::warn!(error = %e, mode, "Keychain read failed, falling back to DB");
+        }
+    }
+    // Fall back to DB
+    credentials_get_db(pool, mode)
+}
+
 // --- Tauri command wrappers ---
 
 #[tauri::command]
@@ -95,7 +109,14 @@ pub fn credentials_set(
     secret_key: String,
 ) -> Result<(), String> {
     let creds = AlpacaCredentials { key_id, secret_key };
-    credentials_set_db(&pool, &mode, &creds)
+    // Store in keychain primarily, DB as fallback
+    match crate::keychain::keychain_set(&mode, &creds) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            tracing::warn!(error = %e, "Keychain write failed, falling back to DB");
+            credentials_set_db(&pool, &mode, &creds)
+        }
+    }
 }
 
 #[tauri::command]
@@ -103,7 +124,7 @@ pub fn credentials_get(
     pool: tauri::State<'_, DbPool>,
     mode: String,
 ) -> Result<Option<AlpacaCredentialsMasked>, String> {
-    let creds = credentials_get_db(&pool, &mode)?;
+    let creds = credentials_get_any(&pool, &mode)?;
     Ok(creds.map(|c| AlpacaCredentialsMasked {
         key_id: c.key_id,
         has_secret: !c.secret_key.is_empty(),
@@ -115,6 +136,13 @@ pub fn credentials_exists(
     pool: tauri::State<'_, DbPool>,
     mode: String,
 ) -> Result<bool, String> {
+    match crate::keychain::keychain_exists(&mode) {
+        Ok(true) => return Ok(true),
+        Ok(false) => {}
+        Err(e) => {
+            tracing::warn!(error = %e, "Keychain check failed, falling back to DB");
+        }
+    }
     credentials_exists_db(&pool, &mode)
 }
 

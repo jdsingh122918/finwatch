@@ -152,4 +152,9 @@ describe("buildAnalysisPrompt", () => {
     const result = buildAnalysisPrompt([makeScoredTick()], makeContext());
     expect(result.system).toContain("JSON");
   });
+
+  it("includes responseFormat with json_object type", () => {
+    const result = buildAnalysisPrompt([makeScoredTick()], makeContext());
+    expect(result.responseFormat).toEqual({ type: "json_object" });
+  });
 });

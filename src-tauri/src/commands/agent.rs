@@ -1,3 +1,5 @@
+use tracing::{debug, info};
+
 use crate::bridge::SidecarBridge;
 use crate::db::DbPool;
 use crate::types::agent::{AgentState, AgentStatus};
@@ -19,8 +21,8 @@ pub async fn agent_start(
     bridge: tauri::State<'_, SidecarBridge>,
     config: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    // Get Alpaca credentials: DB first, then env vars
-    let creds = crate::commands::credentials::credentials_get_db(&pool, "paper")?;
+    // Get Alpaca credentials: keychain first, then DB, then env vars
+    let creds = crate::commands::credentials::credentials_get_any(&pool, "paper")?;
     let (alpaca_key, alpaca_secret) = match creds {
         Some(c) => (c.key_id, c.secret_key),
         None => {
@@ -43,7 +45,7 @@ pub async fn agent_start(
     let model = app_config
         .get("model")
         .and_then(|m| m.as_str())
-        .unwrap_or("claude-3-5-haiku-20241022");
+        .unwrap_or("claude-haiku-4-5-20251001");
 
     // Build agent:start params merging stored config with provided overrides
     let symbols = config
@@ -77,21 +79,21 @@ pub async fn agent_start(
         },
     });
 
-    eprintln!("[agent_start] Symbols: {:?}, Feed: {}", symbols, feed);
+    info!(?symbols, feed, "Starting agent");
 
     // Spawn sidecar if not running
     if !bridge.is_running() {
-        eprintln!("[agent_start] Spawning sidecar");
+        debug!("Spawning sidecar");
         bridge.spawn(app, "agent/src/index.ts")?;
-        eprintln!("[agent_start] Sidecar spawned");
+        debug!("Sidecar spawned");
     } else {
-        eprintln!("[agent_start] Sidecar already running");
+        debug!("Sidecar already running");
     }
 
     // Send agent:start command
-    eprintln!("[agent_start] Sending agent:start JSON-RPC request");
+    debug!("Sending agent:start JSON-RPC request");
     let response = bridge.send_request("agent:start", Some(agent_params))?;
-    eprintln!("[agent_start] Got response: {:?}", response.result);
+    debug!(result = ?response.result, "agent:start response received");
     Ok(response.result.unwrap_or(serde_json::json!({"status": "started"})))
 }
 
@@ -100,7 +102,7 @@ pub async fn agent_stop(
     bridge: tauri::State<'_, SidecarBridge>,
 ) -> Result<serde_json::Value, String> {
     if bridge.is_running() {
-        let _ = bridge.send_request("agent:stop", None);
+        let _ = bridge.send_notification("agent:stop", None);
         bridge.kill()?;
     }
     Ok(serde_json::json!({"status": "stopped"}))
@@ -110,25 +112,22 @@ pub async fn agent_stop(
 pub fn agent_status(
     bridge: tauri::State<'_, SidecarBridge>,
 ) -> AgentStatus {
-    if bridge.is_running() {
-        AgentStatus {
-            state: AgentState::Running,
-            current_session_id: None,
-            current_cycle_id: None,
-            total_cycles: 0,
-            total_anomalies: 0,
-            uptime: 0,
-            last_error: None,
+    let state = if bridge.is_running() {
+        if bridge.is_healthy(std::time::Duration::from_secs(90)) {
+            AgentState::Running
+        } else {
+            AgentState::Unhealthy
         }
     } else {
-        AgentStatus {
-            state: AgentState::Idle,
-            current_session_id: None,
-            current_cycle_id: None,
-            total_cycles: 0,
-            total_anomalies: 0,
-            uptime: 0,
-            last_error: None,
-        }
+        AgentState::Idle
+    };
+    AgentStatus {
+        state,
+        current_session_id: None,
+        current_cycle_id: None,
+        total_cycles: 0,
+        total_anomalies: 0,
+        uptime: 0,
+        last_error: None,
     }
 }

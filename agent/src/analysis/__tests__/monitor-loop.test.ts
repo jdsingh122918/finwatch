@@ -262,6 +262,22 @@ describe("MonitorLoop", () => {
     buffer.destroy();
   });
 
+  it("passes memoryContext to CycleRunner when provided", async () => {
+    const buffer = new DataBuffer({ flushIntervalMs: 30, urgentThreshold: 0.8 });
+    const memoryContext = vi.fn().mockReturnValue("<relevant-context>\nTest memory\n</relevant-context>");
+    const loop = new MonitorLoop(buffer, makeDeps({ memoryContext }));
+
+    loop.start();
+    buffer.push(makeTick());
+
+    await new Promise((r) => setTimeout(r, 80));
+
+    loop.stop();
+    buffer.destroy();
+
+    expect(memoryContext).toHaveBeenCalled();
+  });
+
   it("tracks uptime while running", async () => {
     const buffer = new DataBuffer({ flushIntervalMs: 100, urgentThreshold: 0.8 });
     const loop = new MonitorLoop(buffer, makeDeps());
