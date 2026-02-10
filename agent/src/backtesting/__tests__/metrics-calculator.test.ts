@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { BacktestTrade } from "@finwatch/shared";
-import { calculateMetrics } from "../metrics-calculator.js";
+import { calculateMetrics, calculateV2Metrics } from "../metrics-calculator.js";
+import type { TradeV2Info } from "../metrics-calculator.js";
 
 function makeTrade(overrides: Partial<BacktestTrade>): BacktestTrade {
   return {
@@ -186,5 +187,138 @@ describe("calculateMetrics", () => {
     expect(metrics.monthlyReturns[0].return).toBeCloseTo(2.0, 1);
     // Feb: 102000 -> 101000 = -0.98%
     expect(metrics.monthlyReturns[1].return).toBeCloseTo(-0.98, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V2 Metrics
+// ---------------------------------------------------------------------------
+
+function makeV2Trade(overrides: Partial<TradeV2Info> = {}): TradeV2Info {
+  return {
+    tradeId: "btt-1",
+    confluenceScore: 65,
+    regime: "trending_up",
+    atr: 2.5,
+    qty: 10,
+    realizedPnl: 100,
+    ...overrides,
+  };
+}
+
+describe("calculateV2Metrics", () => {
+  it("returns sensible defaults for empty trades", () => {
+    const v2 = calculateV2Metrics([]);
+    expect(v2.avgConfluenceScore).toBe(0);
+    expect(v2.winRateByRegime).toEqual({});
+    expect(v2.winRateByScoreBucket).toEqual({});
+    expect(v2.avgPositionSizeOverAtr).toBe(0);
+  });
+
+  it("calculates avgConfluenceScore correctly", () => {
+    const trades = [
+      makeV2Trade({ tradeId: "t1", confluenceScore: 60 }),
+      makeV2Trade({ tradeId: "t2", confluenceScore: 80 }),
+      makeV2Trade({ tradeId: "t3", confluenceScore: 70 }),
+    ];
+    const v2 = calculateV2Metrics(trades);
+    // (60 + 80 + 70) / 3 = 70
+    expect(v2.avgConfluenceScore).toBeCloseTo(70);
+  });
+
+  it("calculates winRateByRegime grouping", () => {
+    const trades = [
+      makeV2Trade({ tradeId: "t1", regime: "trending_up", realizedPnl: 100 }),
+      makeV2Trade({ tradeId: "t2", regime: "trending_up", realizedPnl: -50 }),
+      makeV2Trade({ tradeId: "t3", regime: "volatile", realizedPnl: 200 }),
+      makeV2Trade({ tradeId: "t4", regime: "volatile", realizedPnl: -30 }),
+      makeV2Trade({ tradeId: "t5", regime: "volatile", realizedPnl: 50 }),
+    ];
+    const v2 = calculateV2Metrics(trades);
+
+    expect(v2.winRateByRegime["trending_up"]).toEqual({
+      wins: 1,
+      losses: 1,
+      winRate: 0.5,
+    });
+    expect(v2.winRateByRegime["volatile"]).toEqual({
+      wins: 2,
+      losses: 1,
+      winRate: 2 / 3,
+    });
+  });
+
+  it("calculates winRateByScoreBucket grouping", () => {
+    const trades = [
+      makeV2Trade({ tradeId: "t1", confluenceScore: 45, realizedPnl: 100 }),  // 40-60
+      makeV2Trade({ tradeId: "t2", confluenceScore: 55, realizedPnl: -50 }),  // 40-60
+      makeV2Trade({ tradeId: "t3", confluenceScore: 70, realizedPnl: 200 }),  // 60-80
+      makeV2Trade({ tradeId: "t4", confluenceScore: 85, realizedPnl: 150 }),  // 80+
+      makeV2Trade({ tradeId: "t5", confluenceScore: 90, realizedPnl: -10 }),  // 80+
+    ];
+    const v2 = calculateV2Metrics(trades);
+
+    expect(v2.winRateByScoreBucket["40-60"]).toEqual({
+      wins: 1,
+      losses: 1,
+      winRate: 0.5,
+    });
+    expect(v2.winRateByScoreBucket["60-80"]).toEqual({
+      wins: 1,
+      losses: 0,
+      winRate: 1,
+    });
+    expect(v2.winRateByScoreBucket["80+"]).toEqual({
+      wins: 1,
+      losses: 1,
+      winRate: 0.5,
+    });
+  });
+
+  it("excludes trades with null realizedPnl from win/loss grouping", () => {
+    const trades = [
+      makeV2Trade({ tradeId: "t1", regime: "trending_up", realizedPnl: null }),
+      makeV2Trade({ tradeId: "t2", regime: "trending_up", realizedPnl: 100 }),
+    ];
+    const v2 = calculateV2Metrics(trades);
+
+    // Only 1 trade has realizedPnl
+    expect(v2.winRateByRegime["trending_up"]).toEqual({
+      wins: 1,
+      losses: 0,
+      winRate: 1,
+    });
+    // But avgConfluenceScore counts all trades
+    expect(v2.avgConfluenceScore).toBe(65);
+  });
+
+  it("calculates avgPositionSizeOverAtr correctly", () => {
+    const trades = [
+      makeV2Trade({ tradeId: "t1", qty: 10, atr: 2.0 }),  // 10/2 = 5
+      makeV2Trade({ tradeId: "t2", qty: 20, atr: 4.0 }),  // 20/4 = 5
+      makeV2Trade({ tradeId: "t3", qty: 15, atr: 5.0 }),  // 15/5 = 3
+    ];
+    const v2 = calculateV2Metrics(trades);
+    // (5 + 5 + 3) / 3 = 4.333
+    expect(v2.avgPositionSizeOverAtr).toBeCloseTo(4.333, 2);
+  });
+
+  it("skips trades with atr=0 in avgPositionSizeOverAtr", () => {
+    const trades = [
+      makeV2Trade({ tradeId: "t1", qty: 10, atr: 2.0 }),  // 10/2 = 5
+      makeV2Trade({ tradeId: "t2", qty: 20, atr: 0 }),    // skipped
+    ];
+    const v2 = calculateV2Metrics(trades);
+    // Only 1 valid trade: 10/2 = 5
+    expect(v2.avgPositionSizeOverAtr).toBeCloseTo(5);
+  });
+
+  it("handles scores below 40 — excluded from score buckets", () => {
+    const trades = [
+      makeV2Trade({ tradeId: "t1", confluenceScore: 30, realizedPnl: 100 }),
+    ];
+    const v2 = calculateV2Metrics(trades);
+    // Score 30 is below all buckets
+    expect(Object.keys(v2.winRateByScoreBucket)).toHaveLength(0);
   });
 });

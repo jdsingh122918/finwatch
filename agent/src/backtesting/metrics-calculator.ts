@@ -1,5 +1,25 @@
 import type { BacktestTrade, BacktestMetrics } from "@finwatch/shared";
 
+// ---------------------------------------------------------------------------
+// V2 metrics types (local — BacktestMetrics in shared/ is frozen)
+// ---------------------------------------------------------------------------
+
+export type TradeV2Info = {
+  tradeId: string;
+  confluenceScore: number;
+  regime: string;
+  atr: number;
+  qty: number;
+  realizedPnl: number | null;
+};
+
+export type V2Metrics = {
+  avgConfluenceScore: number;
+  winRateByRegime: Record<string, { wins: number; losses: number; winRate: number }>;
+  winRateByScoreBucket: Record<string, { wins: number; losses: number; winRate: number }>;
+  avgPositionSizeOverAtr: number;
+};
+
 type EquityPoint = { date: string; value: number };
 
 function emptyBaseMetrics(): Omit<BacktestMetrics, "perSymbol"> {
@@ -214,4 +234,80 @@ export function calculateMetrics(
   }
 
   return { ...base, perSymbol };
+}
+
+// ---------------------------------------------------------------------------
+// V2 metrics calculator
+// ---------------------------------------------------------------------------
+
+function scoreBucket(score: number): string | null {
+  if (score >= 80) return "80+";
+  if (score >= 60) return "60-80";
+  if (score >= 40) return "40-60";
+  return null;
+}
+
+export function calculateV2Metrics(trades: TradeV2Info[]): V2Metrics {
+  if (trades.length === 0) {
+    return {
+      avgConfluenceScore: 0,
+      winRateByRegime: {},
+      winRateByScoreBucket: {},
+      avgPositionSizeOverAtr: 0,
+    };
+  }
+
+  // Average confluence score
+  const avgConfluenceScore =
+    trades.reduce((sum, t) => sum + t.confluenceScore, 0) / trades.length;
+
+  // Win rate by regime (only trades with realized PnL)
+  const regimeGroups = new Map<string, { wins: number; losses: number }>();
+  const bucketGroups = new Map<string, { wins: number; losses: number }>();
+
+  for (const t of trades) {
+    if (t.realizedPnl === null) continue;
+    const isWin = t.realizedPnl > 0;
+
+    // Regime grouping
+    const rg = regimeGroups.get(t.regime) ?? { wins: 0, losses: 0 };
+    if (isWin) rg.wins++;
+    else rg.losses++;
+    regimeGroups.set(t.regime, rg);
+
+    // Score bucket grouping
+    const bucket = scoreBucket(t.confluenceScore);
+    if (bucket) {
+      const bg = bucketGroups.get(bucket) ?? { wins: 0, losses: 0 };
+      if (isWin) bg.wins++;
+      else bg.losses++;
+      bucketGroups.set(bucket, bg);
+    }
+  }
+
+  const winRateByRegime: V2Metrics["winRateByRegime"] = {};
+  for (const [regime, { wins, losses }] of regimeGroups) {
+    const total = wins + losses;
+    winRateByRegime[regime] = { wins, losses, winRate: total > 0 ? wins / total : 0 };
+  }
+
+  const winRateByScoreBucket: V2Metrics["winRateByScoreBucket"] = {};
+  for (const [bucket, { wins, losses }] of bucketGroups) {
+    const total = wins + losses;
+    winRateByScoreBucket[bucket] = { wins, losses, winRate: total > 0 ? wins / total : 0 };
+  }
+
+  // Average position size / ATR
+  const validAtrTrades = trades.filter((t) => t.atr > 0);
+  const avgPositionSizeOverAtr =
+    validAtrTrades.length > 0
+      ? validAtrTrades.reduce((sum, t) => sum + t.qty / t.atr, 0) / validAtrTrades.length
+      : 0;
+
+  return {
+    avgConfluenceScore,
+    winRateByRegime,
+    winRateByScoreBucket,
+    avgPositionSizeOverAtr,
+  };
 }

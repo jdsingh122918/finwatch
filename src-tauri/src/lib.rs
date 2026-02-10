@@ -1,6 +1,7 @@
 pub mod bridge;
 pub mod bridge_pending;
 pub mod commands;
+pub mod indicators;
 pub mod keychain;
 pub mod db;
 pub mod events;
@@ -74,6 +75,7 @@ pub fn run() {
             commands::backtest::backtest_delete,
             commands::backtest::backtest_cancel,
             commands::backtest::backtest_update_status,
+            indicators::indicators_compute,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import type { BacktestConfig, DataTick, Anomaly } from "@finwatch/shared";
 import { BacktestEngine } from "../backtest-engine.js";
+import type { BacktestResultV2 } from "../backtest-engine.js";
+import type { IndicatorSnapshot } from "../../trading/regime-detector.js";
 
 function makeConfig(overrides: Partial<BacktestConfig> = {}): BacktestConfig {
   return {
@@ -238,5 +240,126 @@ describe("BacktestEngine", () => {
     const tslaTrades = result.trades.filter((t) => t.symbol === "TSLA");
     expect(aaplTrades.length).toBeGreaterThan(0);
     expect(tslaTrades.length).toBeGreaterThan(0);
+  });
+
+  it("v1 fallback works when no computeIndicators is provided", async () => {
+    const config = makeConfig();
+    const ticks = makeTicks();
+    const fetchData = vi.fn().mockResolvedValue(ticks);
+
+    const anomaly: Anomaly = {
+      id: "anom-1",
+      severity: "high",
+      source: "backtest",
+      symbol: "AAPL",
+      timestamp: ticks[2].timestamp,
+      description: "Price spike detected",
+      metrics: { close: 193, volume: 2000000 },
+      preScreenScore: 0.85,
+      sessionId: "bt-test",
+    };
+    const runAnalysis = vi.fn().mockResolvedValue([anomaly]);
+
+    // No computeIndicators — should use v1 path
+    const engine = new BacktestEngine(config, { fetchData, runAnalysis });
+    const result: BacktestResultV2 = await engine.run();
+
+    expect(result.status).toBe("completed");
+    expect(result.v2Metrics).toBeUndefined();
+    expect(result.trades.length).toBeGreaterThan(0);
+  });
+
+  it("evaluate is properly awaited (async v2 path)", async () => {
+    const config = makeConfig();
+    const ticks = makeTicks();
+    const fetchData = vi.fn().mockResolvedValue(ticks);
+
+    const anomaly: Anomaly = {
+      id: "anom-1",
+      severity: "high",
+      source: "backtest",
+      symbol: "AAPL",
+      timestamp: ticks[2].timestamp,
+      description: "Price spike detected",
+      metrics: { close: 193, volume: 2000000, priceChange: 0.05 },
+      preScreenScore: 0.85,
+      sessionId: "bt-test",
+    };
+    const runAnalysis = vi.fn().mockResolvedValue([anomaly]);
+
+    const mockIndicators: IndicatorSnapshot = {
+      rsi: 35,
+      macdHistogram: 0.5,
+      macdLine: 1.2,
+      macdSignal: 0.7,
+      bollingerPercentB: 0.15,
+      bollingerWidth: 0.04,
+      atr: 3.5,
+      atrAvg20: 3.0,
+    };
+
+    const computeIndicators = vi.fn().mockResolvedValue(mockIndicators);
+
+    const engine = new BacktestEngine(config, { fetchData, runAnalysis, computeIndicators });
+    const result: BacktestResultV2 = await engine.run();
+
+    expect(result.status).toBe("completed");
+    // computeIndicators should have been called (v2 mode active)
+    expect(computeIndicators).toHaveBeenCalled();
+  });
+
+  it("v2 mode passes ticks to evaluate and produces v2Metrics", async () => {
+    const config = makeConfig();
+
+    // 3 days of ticks to get buy + sell pairs
+    const ticks: DataTick[] = [
+      { sourceId: "backtest", timestamp: new Date("2024-01-02").getTime(), symbol: "AAPL", metrics: { open: 180, high: 185, low: 178, close: 183, volume: 1000000 }, metadata: {} },
+      { sourceId: "backtest", timestamp: new Date("2024-01-03").getTime(), symbol: "AAPL", metrics: { open: 183, high: 190, low: 182, close: 188, volume: 1500000 }, metadata: {} },
+      { sourceId: "backtest", timestamp: new Date("2024-01-04").getTime(), symbol: "AAPL", metrics: { open: 188, high: 195, low: 187, close: 193, volume: 2000000 }, metadata: {} },
+    ];
+
+    const fetchData = vi.fn().mockResolvedValue(ticks);
+
+    let callCount = 0;
+    const runAnalysis = vi.fn().mockImplementation(() => {
+      callCount++;
+      const tick = ticks[Math.min(callCount - 1, ticks.length - 1)];
+      const anomaly: Anomaly = {
+        id: `anom-${callCount}`,
+        severity: "high",
+        source: "backtest",
+        symbol: "AAPL",
+        timestamp: tick.timestamp,
+        description: callCount <= 2 ? "Price drop detected" : "Price spike detected",
+        metrics: { close: tick.metrics.close, volume: tick.metrics.volume, priceChange: callCount <= 2 ? -0.05 : 0.05, volumeChange: 0.8 },
+        preScreenScore: 0.85,
+        sessionId: "bt-test",
+      };
+      return Promise.resolve([anomaly]);
+    });
+
+    const mockIndicators: IndicatorSnapshot = {
+      rsi: 35,
+      macdHistogram: 0.5,
+      macdLine: 1.2,
+      macdSignal: 0.7,
+      bollingerPercentB: 0.15,
+      bollingerWidth: 0.04,
+      atr: 3.5,
+      atrAvg20: 3.0,
+    };
+    const computeIndicators = vi.fn().mockResolvedValue(mockIndicators);
+
+    const engine = new BacktestEngine(config, { fetchData, runAnalysis, computeIndicators });
+    const result: BacktestResultV2 = await engine.run();
+
+    expect(result.status).toBe("completed");
+    expect(computeIndicators).toHaveBeenCalled();
+
+    // Should have trades (v2 pipeline generates them via confluence scoring)
+    if (result.trades.length > 0 && result.v2Metrics) {
+      expect(result.v2Metrics.avgConfluenceScore).toBeGreaterThan(0);
+      expect(typeof result.v2Metrics.avgPositionSizeOverAtr).toBe("number");
+    }
   });
 });

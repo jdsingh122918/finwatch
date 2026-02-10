@@ -4,12 +4,16 @@ import type {
   BacktestProgress,
   DataTick,
   Anomaly,
-  TradeAction,
   Severity,
 } from "@finwatch/shared";
 import { BacktestExecutor } from "./backtest-executor.js";
-import { calculateMetrics } from "./metrics-calculator.js";
+import { calculateMetrics, calculateV2Metrics } from "./metrics-calculator.js";
+import type { TradeV2Info, V2Metrics } from "./metrics-calculator.js";
 import { TradeGenerator } from "../trading/trade-generator.js";
+import type { ComputeIndicatorsFn } from "../trading/trade-generator.js";
+import type { IndicatorSnapshot } from "../trading/regime-detector.js";
+import { detectRegime } from "../trading/regime-detector.js";
+import { scoreConfluence } from "../trading/confluence-scorer.js";
 import { RiskManager } from "../trading/risk-manager.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -31,6 +35,15 @@ export type RunAnalysisFn = (
 export type BacktestDeps = {
   fetchData: FetchDataFn;
   runAnalysis: RunAnalysisFn;
+  computeIndicators?: ComputeIndicatorsFn;
+};
+
+// ---------------------------------------------------------------------------
+// Extended result type (BacktestResult in shared/ is frozen)
+// ---------------------------------------------------------------------------
+
+export type BacktestResultV2 = BacktestResult & {
+  v2Metrics?: V2Metrics;
 };
 
 // ---------------------------------------------------------------------------
@@ -98,11 +111,11 @@ export class BacktestEngine {
     this.cancelled = true;
   }
 
-  async run(): Promise<BacktestResult> {
+  async run(): Promise<BacktestResultV2> {
     const startedAt = Date.now();
     this.cancelled = false;
 
-    const result: BacktestResult = {
+    const result: BacktestResultV2 = {
       id: this.config.id,
       config: this.config,
       status: "running",
@@ -146,7 +159,13 @@ export class BacktestEngine {
       // 2. Set up executor, trade generator, and risk manager
       // ---------------------------------------------------------------
       const executor = new BacktestExecutor(this.config.id, this.config.initialCapital);
-      const tradeGenerator = new TradeGenerator(executor);
+      const v2Mode = !!this.deps.computeIndicators;
+      const positionLookup = { hasPosition: (s: string) => executor.hasPosition(s), getQty: (s: string) => executor.getQty(s) };
+      const tradeGenerator = new TradeGenerator(
+        v2Mode
+          ? { positions: positionLookup, computeIndicators: this.deps.computeIndicators!, accountEquity: this.config.initialCapital }
+          : positionLookup,
+      );
       const riskManager = new RiskManager(this.config.riskLimits);
 
       // ---------------------------------------------------------------
@@ -162,6 +181,9 @@ export class BacktestEngine {
       let lastTradeTimestamp: number | undefined;
       let lastTradeSymbol: string | undefined;
       let previousDate: string | undefined;
+
+      // V2 metadata collection for extended metrics
+      const v2TradeInfos: TradeV2Info[] = [];
 
       // Rolling window size: use prior N days as statistical context
       // so the pre-screener can compute meaningful z-scores
@@ -209,13 +231,25 @@ export class BacktestEngine {
         // Get current prices for this date
         const prices = latestPrices(dateTicks);
 
+        // Pre-compute indicators per symbol for this date (v2 mode only)
+        const dateIndicators = new Map<string, IndicatorSnapshot>();
+        if (v2Mode) {
+          const symbolsInDate = new Set(dateTicks.map((t) => t.symbol).filter(Boolean) as string[]);
+          for (const sym of symbolsInDate) {
+            const symTicks = windowTicks.filter((t) => t.symbol === sym);
+            if (symTicks.length > 0) {
+              dateIndicators.set(sym, await this.deps.computeIndicators!(sym, symTicks));
+            }
+          }
+        }
+
         // Generate and execute trades for qualifying anomalies
         for (const anomaly of qualifying) {
           if (this.cancelled) {
             return this.finishCancelled(result, executor);
           }
 
-          const action = tradeGenerator.evaluate(anomaly);
+          const action = await tradeGenerator.evaluate(anomaly, v2Mode ? dateTicks : undefined);
           if (!action) continue;
 
           // Run risk check
@@ -254,6 +288,31 @@ export class BacktestEngine {
             dailyTradeCount++;
             lastTradeTimestamp = timestamp;
             lastTradeSymbol = symbol;
+
+            // Capture v2 metadata using pre-computed indicators
+            if (v2Mode) {
+              const indicators = dateIndicators.get(symbol);
+              let confluenceScore = (action.confidence ?? 0) * 100;
+              let regimeName = "unknown";
+              let atr = 0;
+
+              if (indicators) {
+                const regime = detectRegime(indicators);
+                const score = scoreConfluence(anomaly, indicators, regime);
+                confluenceScore = score.total;
+                regimeName = regime.regime;
+                atr = indicators.atr;
+              }
+
+              v2TradeInfos.push({
+                tradeId: trade.id,
+                confluenceScore,
+                regime: regimeName,
+                atr,
+                qty: trade.qty,
+                realizedPnl: trade.realizedPnl,
+              });
+            }
           }
         }
 
@@ -287,6 +346,18 @@ export class BacktestEngine {
       result.metrics = metrics;
       result.completedAt = Date.now();
 
+      // Update v2 trade infos with final realizedPnl from executor
+      if (v2Mode && v2TradeInfos.length > 0) {
+        const tradeMap = new Map(trades.map((t) => [t.id, t]));
+        for (const info of v2TradeInfos) {
+          const executedTrade = tradeMap.get(info.tradeId);
+          if (executedTrade) {
+            info.realizedPnl = executedTrade.realizedPnl;
+          }
+        }
+        result.v2Metrics = calculateV2Metrics(v2TradeInfos);
+      }
+
       this.log.info("Backtest completed", {
         totalTrades: trades.length.toString(),
         totalReturn: metrics.totalReturn.toFixed(2),
@@ -305,7 +376,7 @@ export class BacktestEngine {
     }
   }
 
-  private finishCancelled(result: BacktestResult, executor?: BacktestExecutor): BacktestResult {
+  private finishCancelled(result: BacktestResultV2, executor?: BacktestExecutor): BacktestResultV2 {
     this.log.info("Backtest cancelled");
     result.status = "cancelled";
     result.completedAt = Date.now();
@@ -325,4 +396,5 @@ export class BacktestEngine {
       });
     }
   }
+
 }
